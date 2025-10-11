@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@source "./src/**/*.{rs,html,css}";
+
+body {
+  background-color: #0f1116;
+  color: #ffffff;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 20px;
+}
+
+.scrollbar::-webkit-scrollbar:vertical {
+  @apply w-1.5;
+}
+
+.scrollbar::-webkit-scrollbar-track {
+  @apply bg-gray-500 rounded-sm;
+}
+
+.scrollbar::-webkit-scrollbar-track:hover {
+  @apply bg-gray-400;
+}
+
+.scrollbar::-webkit-scrollbar-track:active {
+  @apply bg-gray-400;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-gray-700 rounded-sm;
+}
+
+.scrollbar::-webkit-scrollbar {
+  @apply bg-transparent;
+}

@@ -1,0 +1,15 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+soulful = { workspace = true, optional = true }
+shared = { workspace = true }
+chrono = { version = "0.4.42", features = ["wasm-bindgen"] }
+serde = { version = "1.0.226", features = ["derive"] }
+
+[features]
+default = []
+server = ["dep:soulful"]
