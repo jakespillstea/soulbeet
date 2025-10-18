@@ -1,37 +1,45 @@
 //! This crate contains all shared fullstack server functions.
 
+use std::sync::LazyLock;
+
 use chrono::Duration;
-use dioxus::logger::tracing::info;
-use dioxus::prelude::*;
+use dioxus::{
+    logger::tracing::info,
+    prelude::{server_fn::error::NoCustomError, *},
+};
 use serde::{Deserialize, Serialize};
-use shared::download::DownloadQuery;
-use shared::musicbrainz::{AlbumWithTracks, SearchResult};
+use shared::{
+    download::DownloadQuery,
+    musicbrainz::{AlbumWithTracks, SearchResult},
+    slskd::AlbumResult,
+};
 
 #[cfg(feature = "server")]
 use shared::musicbrainz::Track;
 #[cfg(feature = "server")]
 use soulful::musicbrainz;
 #[cfg(feature = "server")]
-use soulful::slskd::{AlbumResult, SoulseekClientBuilder};
+use soulful::slskd::{SoulseekClient, SoulseekClientBuilder};
+
+#[cfg(feature = "server")]
+static SLSKD_CLIENT: LazyLock<SoulseekClient> = LazyLock::new(|| {
+    SoulseekClientBuilder::new()
+        .api_key("BOVeIS961OlDWlUeEjF6DsIZKzf857ijKBGFWWw4N9Scj1xwoq2C3VbjMBU=")
+        .base_url("http://192.168.1.105:5030/")
+        .download_path("/tmp/downloads")
+        .build()
+        .unwrap()
+});
 
 #[cfg(feature = "server")]
 async fn slskd_search(
     artist: String,
     album: String,
-    tracks: Option<Vec<Track>>,
+    tracks: Vec<Track>,
 ) -> Result<Vec<AlbumResult>, ServerFnError> {
-    use dioxus::prelude::server_fn::error::NoCustomError;
-
-    let client = SoulseekClientBuilder::new()
-        .api_key("BOVeIS961OlDWlUeEjF6DsIZKzf857ijKBGFWWw4N9Scj1xwoq2C3VbjMBU=")
-        .base_url("http://192.168.1.105:5030/")
-        .download_path("/tmp/downloads")
-        .build()
-        .unwrap();
-
-    let health = client.check_connection().await;
-    let mut search = client
-        .search(artist, album, tracks, Duration::seconds(30))
+    let health = SLSKD_CLIENT.check_connection().await;
+    let mut search = SLSKD_CLIENT
+        .search(artist, album, tracks, Duration::seconds(45))
         .await
         .map_err(|e| ServerFnError::<NoCustomError>::ServerError(e.to_string()))?;
     search.sort_by(|a, b| b.score.total_cmp(&a.score));
@@ -93,21 +101,6 @@ pub async fn find_album(id: String) -> Result<AlbumWithTracks, ServerFnError> {
 }
 
 #[server]
-pub async fn download(data: DownloadQuery) -> Result<(), ServerFnError> {
-    info!("{data:?}");
-
-    match data {
-        DownloadQuery::Album { album } => {
-            info!("{album:?}");
-
-            slskd_search(album.artist, album.title, None).await?;
-        }
-        DownloadQuery::Track { album, tracks } => {
-            info!("{tracks:?}");
-
-            slskd_search(album.artist, album.title, Some(tracks)).await?;
-        }
-    }
-
-    Ok(())
+pub async fn download(data: DownloadQuery) -> Result<Vec<AlbumResult>, ServerFnError> {
+    slskd_search(data.album.artist, data.album.title, data.tracks).await
 }

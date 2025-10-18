@@ -1,16 +1,7 @@
-// No longer need once_cell in Cargo.toml
-// Add to Cargo.toml:
-// regex = "1"
-// serde = { version = "1.0", features = ["derive"] }
-// serde_json = "1.0"
-
 use regex::Regex;
-use serde::Serialize;
-use std::collections::HashSet;
-use std::path::Path;
-use std::sync::LazyLock; // Use the standard library's LazyLock
+use shared::slskd::MatchResult;
+use std::{collections::HashSet, path::Path, sync::LazyLock};
 
-// Pre-compiled regex for performance, now using LazyLock
 static RE_NON_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^\w\s]").unwrap());
 static RE_LEAD_TRACK_FIXED: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(\d{1,3}|[A-D]\d{1,2})\s*[\.\-]\s*").unwrap());
@@ -45,8 +36,6 @@ impl CleanedText {
     }
 }
 
-// --- Similarity Functions ---
-
 fn jaccard_sim(a: &CleanedText, b: &CleanedText) -> f64 {
     let inter = a.words().intersection(b.words()).count();
     let uni = a.words().len() + b.words().len() - inter;
@@ -75,8 +64,6 @@ fn dice_sim(a: &CleanedText, b: &CleanedText) -> f64 {
     }
 }
 
-// --- String Cleaning & Extraction ---
-
 fn clean_name(name: &str) -> String {
     let name = name.replace('_', " ");
     let mut cleaned = RE_LEAD_TRACK_FIXED.replace(&name, "").to_string();
@@ -93,8 +80,6 @@ fn extract_track_title(stem: &str) -> String {
         stem_clean
     }
 }
-
-// --- Core Logic Structs ---
 
 #[derive(Debug)]
 struct PathInfo {
@@ -130,19 +115,6 @@ impl PathInfo {
         }
     }
 }
-
-#[derive(Debug, Clone, Serialize)]
-pub struct MatchResult {
-    pub guessed_artist: String,
-    pub guessed_album: String,
-    pub matched_track: String,
-    pub artist_score: f64,
-    pub album_score: f64,
-    pub track_score: f64,
-    pub total_score: f64,
-}
-
-// --- Scoring Functions ---
 
 fn score_album(folders: &[CleanedText], target_album: &CleanedText) -> (f64, CleanedText) {
     folders
@@ -206,8 +178,6 @@ fn score_track(stem: &CleanedText, expected_tracks: &[CleanedText]) -> (f64, Cle
         .unwrap_or((0.0, CleanedText::new("")))
 }
 
-// --- Public API ---
-
 pub fn rank_match(
     filename: &str,
     searched_artist: Option<&str>,
@@ -221,7 +191,6 @@ pub fn rank_match(
     // and we don't penalize the score for it.
     const ALBUM_INFO_THRESHOLD: f64 = 0.25;
 
-    // --- Component Scoring ---
     let path_info = PathInfo::from_path(filename);
     let path_folders_c: Vec<_> = path_info
         .parent_folders
@@ -257,7 +226,6 @@ pub fn rank_match(
         )
     };
 
-    // --- Information-Aware Dynamic Weighting ---
     let mut weighted_sum = 0.0;
     let mut total_weight = 0.0;
 
@@ -265,11 +233,12 @@ pub fn rank_match(
         weighted_sum += artist_score * ARTIST_WEIGHT;
         total_weight += ARTIST_WEIGHT;
     }
+
     if !expected_tracks.is_empty() {
         weighted_sum += track_score * TRACK_WEIGHT;
         total_weight += TRACK_WEIGHT;
     }
-    // Only factor in the album if it was searched for AND the path provided meaningful info.
+
     if searched_album.is_some() {
         weighted_sum += album_score * ALBUM_WEIGHT;
         if album_score > ALBUM_INFO_THRESHOLD {

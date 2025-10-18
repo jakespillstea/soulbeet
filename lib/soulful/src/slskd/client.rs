@@ -2,17 +2,18 @@
 use super::utils;
 use crate::{
     error::{Result, SoulseekError},
-    slskd::models::{
-        AlbumResult, DownloadRequestFile, DownloadStatus, SearchResponse, SearchResult, TrackResult,
-    },
+    slskd::models::{DownloadRequestFile, DownloadStatus, SearchResponse},
 };
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 use reqwest::{Client, Method, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use shared::musicbrainz::Track;
+use shared::{
+    musicbrainz::Track,
+    slskd::{AlbumResult, MatchResult, SearchResult, TrackResult},
+};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -167,19 +168,16 @@ impl SoulseekClient {
         Ok(())
     }
 
-    /// Performs a search on the Soulseek network and processes the results to find the best
-    /// matching albums or individual tracks.
     pub async fn search(
         &self,
         artist: String,
         album: String,
-        tracks: Option<Vec<Track>>,
+        tracks: Vec<Track>,
         timeout: Duration,
     ) -> Result<Vec<AlbumResult>> {
         self.wait_for_rate_limit().await?;
 
-        let expected_tracks = tracks.unwrap_or_default();
-        let track_titles: Vec<&str> = expected_tracks.iter().map(|t| t.title.as_str()).collect();
+        let track_titles: Vec<&str> = tracks.iter().map(|t| t.title.as_str()).collect();
 
         let query = format!("{} {}", artist.trim(), album.trim());
         info!("Starting search for: '{}'", query);
@@ -248,12 +246,10 @@ impl SoulseekClient {
             self.process_search_responses(&all_responses, &artist, &album, &track_titles);
 
         albums.sort_by(|a, b| {
-            b.quality_score()
-                .partial_cmp(&a.quality_score())
+            b.score
+                .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-
-        info!("{:?}", albums);
 
         info!(
             "Search completed. Final results: {} albums/tracks",
@@ -262,7 +258,6 @@ impl SoulseekClient {
         Ok(albums)
     }
 
-    /// Processes raw search responses using the advanced ranking utility to group and score results.
     fn process_search_responses(
         &self,
         responses: &[SearchResponse],
@@ -276,8 +271,7 @@ impl SoulseekClient {
             .copied()
             .collect();
 
-        // Step 1: Score every single file using the ranking utility
-        let scored_files: Vec<(utils::MatchResult, SearchResult)> = responses
+        let scored_files: Vec<(MatchResult, SearchResult)> = responses
             .iter()
             .flat_map(|resp| {
                 resp.files.iter().filter_map(|file| {
@@ -319,16 +313,18 @@ impl SoulseekClient {
             })
             .collect();
 
-        self.find_best_albums(&scored_files, expected_tracks.len())
+        self.find_best_albums(&scored_files, expected_tracks)
     }
 
-    /// Groups scored files into albums and returns the best ones.
     fn find_best_albums(
         &self,
-        scored_files: &[(utils::MatchResult, SearchResult)],
-        expected_track_count: usize,
+        scored_files: &[(MatchResult, SearchResult)],
+        expected_tracks: &[&str],
     ) -> Vec<AlbumResult> {
-        // Group files by a key representing a unique album from a user
+        if expected_tracks.is_empty() {
+            return vec![];
+        }
+
         let album_groups = scored_files.iter().into_group_map_by(|(rank, search)| {
             (
                 search.username.clone(),
@@ -339,18 +335,51 @@ impl SoulseekClient {
 
         album_groups
             .into_iter()
-            .filter_map(|((username, artist, album_title), files)| {
-                let tracks: Vec<TrackResult> = files
-                    .iter()
-                    .map(|(mr, sr)| TrackResult::new(sr.clone(), mr.clone()))
-                    .collect();
-                if tracks.is_empty() {
+            .filter_map(|((username, artist, album_title), files_in_group)| {
+                // Specific search: find the single best file for each expected track.
+                let mut best_files_for_album = HashMap::new();
+
+                for expected_track_title in expected_tracks {
+                    if let Some(best_file_for_track) = files_in_group
+                        .iter()
+                        // Find all files that matched this specific track
+                        .filter(|(rank, _)| &rank.matched_track == expected_track_title)
+                        // Find the best one among them
+                        .max_by(|(r1, s1), (r2, s2)| {
+                            r1.total_score
+                                .partial_cmp(&r2.total_score)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                                .then_with(|| {
+                                    s1.quality_score().partial_cmp(&s2.quality_score()).unwrap()
+                                })
+                        })
+                    {
+                        best_files_for_album.insert(*expected_track_title, best_file_for_track);
+                    }
+                }
+
+                // If we didn't find a file for every track we were looking for, this album is incomplete.
+                if best_files_for_album.len() != expected_tracks.len() {
                     return None;
                 }
 
-                // Calculate album-level stats
-                let total_size: i64 = tracks.iter().map(|t| t.base.size).sum();
-                let dominant_quality = tracks
+                let final_tracks: Vec<_> = best_files_for_album
+                    .values()
+                    .map(|(mr, sr)| TrackResult::new(sr.clone(), mr.clone()))
+                    .collect();
+
+                if final_tracks.is_empty() {
+                    return None;
+                }
+
+                let completeness = if !expected_tracks.is_empty() {
+                    final_tracks.len() as f64 / expected_tracks.len() as f64
+                } else {
+                    1.0 // Generic searches are considered "complete" by definition.
+                };
+
+                let total_size: i64 = final_tracks.iter().map(|t| t.base.size).sum();
+                let dominant_quality = final_tracks
                     .iter()
                     .map(|t| t.base.quality())
                     .counts()
@@ -359,26 +388,28 @@ impl SoulseekClient {
                     .map(|(val, _)| val)
                     .unwrap_or_default();
 
-                let first_track = tracks[0].base.clone();
+                let first_track = final_tracks[0].base.clone();
                 let album_path = first_track.filename.clone();
 
-                // Calculate an aggregate quality score for the album
-                let avg_score: f64 =
-                    files.iter().map(|(r, _)| r.total_score).sum::<f64>() / files.len() as f64;
-                let avg_format_score = tracks.iter().map(|t| t.base.quality_score()).sum::<f64>()
-                    / tracks.len() as f64;
-                let completeness = tracks.len() as f64 / expected_track_count as f64;
+                let avg_score: f64 = final_tracks.iter().map(|t| t.match_score).sum::<f64>()
+                    / final_tracks.len() as f64;
+                let avg_format_score = final_tracks
+                    .iter()
+                    .map(|t| t.base.quality_score())
+                    .sum::<f64>()
+                    / final_tracks.len() as f64;
+
                 let album_quality_score =
-                    (avg_score * 0.6) + (completeness.min(1.0) * 0.2) + (avg_format_score * 0.2);
+                    (avg_score * 0.3) + (completeness * 0.3) + (avg_format_score * 0.4);
 
                 Some(AlbumResult {
                     username,
                     album_path,
                     album_title,
                     artist: Some(artist),
-                    track_count: tracks.len(),
+                    track_count: final_tracks.len(),
                     total_size,
-                    tracks,
+                    tracks: final_tracks,
                     dominant_quality,
                     has_free_upload_slot: first_track.has_free_upload_slot,
                     upload_speed: first_track.upload_speed,
