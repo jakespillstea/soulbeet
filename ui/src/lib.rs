@@ -3,5 +3,8 @@
 mod navbar;
 pub use navbar::Navbar;
 
+mod auth;
+pub use auth::*;
+
 mod components;
 pub use components::*;

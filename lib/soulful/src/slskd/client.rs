@@ -2,7 +2,7 @@
 use super::utils;
 use crate::{
     error::{Result, SoulseekError},
-    slskd::models::{DownloadRequestFile, DownloadStatus, SearchResponse},
+    slskd::models::{DownloadRequestFile, SearchResponse},
 };
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
@@ -11,7 +11,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared::{
     musicbrainz::Track,
     slskd::{
-        AlbumResult, DownloadRequest, DownloadResponse, MatchResult, SearchResult, TrackResult,
+        AlbumResult, DownloadResponse, DownloadStatus, FlattenedFiles, MatchResult, SearchResult,
+        TrackResult,
     },
 };
 use std::{
@@ -425,9 +426,11 @@ impl SoulseekClient {
     pub async fn download(&self, req: Vec<TrackResult>) -> Result<Vec<DownloadResponse>> {
         let mut requests_by_username: HashMap<String, Vec<DownloadRequestFile>> = HashMap::new();
 
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Debug)]
+        #[serde(rename_all = "camelCase")]
         struct SlskdDownloadResponse {
             id: String,
+            filename: String,
         }
 
         info!("Attempting to download: {} files...", req.len());
@@ -443,25 +446,62 @@ impl SoulseekClient {
 
         for (username, file_requests) in requests_by_username.into_iter() {
             let endpoint = format!("transfers/downloads/{username}");
+            let url = self.base_url.join(&format!("api/v0/{endpoint}"))?;
 
-            let resp_text = self
+            info!(
+                "Sending download request to {} with {} files",
+                url,
+                file_requests.len()
+            );
+            debug!(
+                "Payload: {:?}",
+                serde_json::to_string(&file_requests).unwrap_or_default()
+            );
+
+            let response = self
                 .client
-                .post(self.base_url.join(&format!("api/v0/{endpoint}"))?)
+                .post(url)
                 .header("X-API-Key", self.api_key.as_deref().unwrap_or(""))
                 .json(&file_requests)
                 .send()
-                .await?
-                .text()
                 .await?;
 
-            info!("\n\n{resp_text}\n\n");
+            let status = response.status();
+            let resp_text = response.text().await?;
 
-            if let Ok(single_res) = serde_json::from_str::<SlskdDownloadResponse>(&resp_text) {
-                res.push(DownloadResponse { id: single_res.id });
+            if !status.is_success() {
+                tracing::error!(
+                    "Slskd returned error status: {} - Body: {}",
+                    status,
+                    resp_text
+                );
+                continue;
+            }
+
+            if resp_text.trim().is_empty() {
+                info!("Slskd returned empty success response. Assuming files queued.");
+                for req_file in &file_requests {
+                    res.push(DownloadResponse {
+                        id: "pending".to_string(),
+                        filename: req_file.filename.clone(),
+                    });
+                }
+                // TODO: Check slskd response
+            } else if let Ok(single_res) = serde_json::from_str::<SlskdDownloadResponse>(&resp_text)
+            {
+                res.push(DownloadResponse {
+                    id: single_res.id,
+                    filename: single_res.filename,
+                });
             } else if let Ok(multi_res) =
                 serde_json::from_str::<Vec<SlskdDownloadResponse>>(&resp_text)
             {
-                res.extend(multi_res.into_iter().map(|d| DownloadResponse { id: d.id }));
+                res.extend(multi_res.into_iter().map(|d| DownloadResponse {
+                    id: d.id,
+                    filename: d.filename,
+                }));
+            } else {
+                tracing::error!("Failed to parse response from slskd: '{}'", resp_text);
             }
         }
 
@@ -469,8 +509,10 @@ impl SoulseekClient {
     }
 
     pub async fn get_all_downloads(&self) -> Result<Vec<DownloadStatus>> {
-        self.make_request(Method::GET, "transfers/downloads", None::<()>)
-            .await
+        let flattened: FlattenedFiles = self
+            .make_request(Method::GET, "transfers/downloads", None::<()>)
+            .await?;
+        Ok(flattened.0)
     }
 
     pub async fn cancel_download(
@@ -484,6 +526,7 @@ impl SoulseekClient {
         self.make_request(Method::DELETE, &endpoint, None::<()>)
             .await
     }
+
     pub async fn clear_all_completed_downloads(&self) -> Result<()> {
         info!("Clearing all completed downloads");
         self.make_request(
@@ -493,6 +536,7 @@ impl SoulseekClient {
         )
         .await
     }
+
     pub async fn delete_search(&self, search_id: &str) -> Result<()> {
         let endpoint = format!("searches/{search_id}");
         debug!("Deleting search {}", search_id);
@@ -505,6 +549,7 @@ impl SoulseekClient {
             Err(e) => Err(e),
         }
     }
+
     pub async fn check_connection(&self) -> bool {
         self.make_request::<serde_json::Value, ()>(Method::GET, "session", None)
             .await

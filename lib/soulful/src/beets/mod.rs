@@ -1,36 +1,44 @@
-// Enhance with previous search
-// https://docs.beets.io/en/latest/reference/pathformat.html#available-values
-// beet modify mb_trackid=<track-mbid> track_path
-// beet modify mb_albumid=<album-mbid> track_path
-// beet modify mb_artistid=<artist-mbid> track_path
+use std::{
+    io::{Error, Result},
+    path::Path,
+};
+use tokio::process::Command;
+use tracing::info;
 
-// Analysis
-// https://beets.readthedocs.io/en/v1.4.6/plugins/acousticbrainz.html
+pub async fn import(sources: Vec<String>, target: &Path) -> Result<()> {
+    let config_path =
+        std::env::var("BEETS_CONFIG").unwrap_or_else(|_| "beets_config.yaml".to_string());
 
-// beets import -m (-s?) /download_folder/album
-// beets should be configured to ignore missing album tracks
+    info!(
+        "Starting beet import for {} items to {:?} using config {}",
+        sources.len(),
+        target,
+        config_path
+    );
 
-// Example config
+    let mut cmd = Command::new("beet");
+    cmd.arg("-c")
+        .arg(&config_path)
+        .arg("import")
+        .arg("-q") // quiet mode: do not ask for confirmation
+        .arg("-d") // destination directory
+        .arg(target);
 
-// import:
-//   copy: no
-//   move: yes
-//   resume: no
-//   duplicate_action: remove
-// paths:
-//   default: $albumartist/$album%aunique{}/$track $title
-//   singleton: $albumartist/$album%aunique{}/$title
-// match:
-//   strong_rec_thresh: 0.10
-//   max_rec:
-//     missing_tracks: low
-// musicbrainz:
-//   searchlimit: 20            # Recommendation from: https://github.com/kernitus/beets-oldestdate
-//   extra_tags:                # Enable improved MediaBrainz queries from tags.
-//     [
-//       catalognum,
-//       country,
-//       label,
-//       media,
-//       year
-//     ]
+    for source in sources {
+        cmd.arg(source);
+    }
+
+    // If SINGLETON_MODE env var is set, use -s
+    if std::env::var("BEETS_SINGLETON").is_ok() {
+        cmd.arg("-s");
+    }
+
+    let status = cmd.status().await?;
+
+    if status.success() {
+        info!("Beet import successful");
+        Ok(())
+    } else {
+        Err(Error::other("Beet import failed"))
+    }
+}

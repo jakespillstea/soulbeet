@@ -1,0 +1,41 @@
+services:
+  soulful:
+    build: .
+    container_name: soulful
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=sqlite:/data/soulful.db
+      - SLSKD_URL=http://slskd:5030
+      - SLSKD_API_KEY=your_slskd_api_key_here
+      # This path must match the volume mapping for downloads inside the container
+      - SLSKD_DOWNLOAD_PATH=/downloads
+    volumes:
+      - soulful_data:/data
+      # Map the download folder.
+      # IMPORTANT: This must be the SAME physical folder that slskd writes to.
+      - /path/to/your/downloads:/downloads
+      # Map your music libraries where beets will move files
+      - /path/to/your/music:/music
+      # Mount the beets config
+      # Leave commented to use the default configuration
+      # - ./beets_config.yaml:/app/beets_config.yaml
+    depends_on:
+      - slskd
+  # Optional: Slskd service if you want to run it together
+  # If you already have slskd running elsewhere, ensure Soulful can reach it via network
+  # slskd:
+  #   image: slskd/slskd
+  #   container_name: slskd
+  #   environment:
+  #     - SLSKD_REMOTE_CONFIGURATION=true
+  #   volumes:
+  #     - ./slskd-config:/app/slskd.conf.d
+  #     - /path/to/your/downloads:/app/downloads
+  #   ports:
+  #     - "5030:5030"
+  #   restart: unless-stopped
+
+volumes:
+  soulful_data:

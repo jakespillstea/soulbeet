@@ -33,10 +33,10 @@ pub fn Search() -> Element {
         loading.set(false);
     };
 
-    let download_tracks = move |tracks: Vec<SlskdTrackResult>| async move {
+    let download_tracks = move |(tracks, folder): (Vec<SlskdTrackResult>, String)| async move {
         loading.set(true);
         download_options.set(None);
-        if let Ok(_res) = api::download(tracks).await {
+        if let Ok(_res) = api::download(tracks, folder).await {
             // TODO: Show download progress
             info!("Downloads started");
         }
@@ -83,8 +83,8 @@ pub fn Search() -> Element {
         return rsx! {
           DownloadResults {
             results,
-            on_download: move |tracks| {
-                spawn(download_tracks(tracks));
+            on_download: move |data| {
+                spawn(download_tracks(data));
             },
           }
         };

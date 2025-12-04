@@ -1,14 +1,15 @@
+use dioxus::logger::tracing::info;
 use dioxus::prelude::*;
 use shared::slskd::{AlbumResult, TrackResult};
 use std::collections::HashSet;
 
-use crate::Checkbox;
+use crate::{use_auth, Checkbox};
 
 #[derive(Props, PartialEq, Clone)]
 pub struct Props {
     pub results: Vec<AlbumResult>,
     #[props(into)]
-    pub on_download: EventHandler<Vec<TrackResult>>,
+    pub on_download: EventHandler<(Vec<TrackResult>, String)>,
 }
 
 #[derive(Props, Clone, PartialEq)]
@@ -26,31 +27,28 @@ fn AlbumResultItem(props: AlbumResultItemProps) -> Element {
     rsx! {
         div { key: "{album.album_path}", class: "bg-gray-700 p-4 rounded-md",
             div { class: "flex justify-between items-center mb-2",
-                div {
-                    h4 { class: "text-lg font-semibold", "{album.album_title}" }
+                div { class: "flex-grow",
+                    h4 { class: "text-md font-bold", "{album.album_title}" }
                     p { class: "text-sm text-gray-400",
-                        "by {album.artist.clone().unwrap_or_default()}"
-                    }
-                    p { class: "text-sm text-gray-400",
-                        "Quality: {album.dominant_quality}, Score: {album.score:.2}"
+                        "{album.artist.clone().unwrap_or_default()} - Quality: {album.dominant_quality}, Score: {album.score:.2}"
                     }
                 }
                 button {
-                    class: "bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-300",
+                    class: "bg-teal-600 hover:bg-teal-700 text-white font-semibold py-1 px-3 rounded-md text-sm transition-colors duration-300",
                     onclick: move |_| props.on_album_select_all.call(album.clone()),
                     "Select All"
                 }
             }
-            ul { class: "list-disc pl-5 space-y-1",
+            ul { class: "space-y-1",
                 for TrackResult { base , title , .. } in props.album.tracks {
                     li {
                         key: "{base.filename}",
-                        class: "flex items-center gap-2",
+                        class: "flex items-center gap-2 p-1 rounded-md hover:bg-gray-600 cursor-pointer",
                         onclick: move |_| props.on_track_toggle.call(base.filename.clone()),
 
                         Checkbox { is_selected: props.selected_tracks.read().contains(&base.filename) }
 
-                        label { "{title}" }
+                        label { class: "cursor-pointer", "{title}" }
                     }
                 }
             }
@@ -61,8 +59,24 @@ fn AlbumResultItem(props: AlbumResultItemProps) -> Element {
 /// Main component responsible for displaying all download options.
 #[component]
 pub fn DownloadResults(props: Props) -> Element {
-    let mut selected_tracks = use_signal(|| HashSet::<String>::new());
+    let mut selected_tracks = use_signal(HashSet::<String>::new);
     let results = props.results.clone();
+    let mut folders = use_signal(std::vec::Vec::new);
+    let mut selected_folder = use_signal(|| "".to_string());
+    let auth = use_auth();
+
+    use_future(move || async move {
+        if let Some(token) = auth.token() {
+            if let Ok(user_folders) = api::get_user_folders(token).await {
+                info!("Fetched {} user folders", user_folders.len());
+
+                if let Some(first) = user_folders.first() {
+                    selected_folder.set(first.path.clone());
+                }
+                folders.set(user_folders);
+            }
+        }
+    });
 
     let handle_album_select_all = move |album_result: AlbumResult| {
         let mut selected = selected_tracks.write();
@@ -83,6 +97,7 @@ pub fn DownloadResults(props: Props) -> Element {
     };
 
     let handle_track_toggle = move |filename: String| {
+        info!("Toggle track selection: {}", filename);
         let mut selected = selected_tracks.write();
         if selected.contains(&filename) {
             selected.remove(&filename);
@@ -100,28 +115,55 @@ pub fn DownloadResults(props: Props) -> Element {
             .filter(|track| selected_filenames.contains(&track.base.filename))
             .cloned()
             .collect();
-        props.on_download.call(tracks_to_download);
+        props
+            .on_download
+            .call((tracks_to_download, selected_folder()));
     };
 
     rsx! {
-        div { class: "bg-gray-800 text-white p-6 rounded-lg shadow-xl max-w-4xl mx-auto my-10",
+        div { class: "bg-gray-800 text-white p-6 sm:p-8 rounded-lg shadow-xl max-w-2xl mx-auto my-10 font-sans relative",
             h3 { class: "text-2xl font-bold mb-6 text-center text-teal-400", "Download Options" }
-            div { class: "space-y-4",
+            // if !folders.read().is_empty() {
+            div { class: "mb-4",
+                label { class: "block text-sm font-medium mb-1", "Select Target Folder" }
+                select {
+                    class: "w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-teal-500 focus:outline-none",
+                    value: "{selected_folder}",
+                    onchange: move |e| selected_folder.set(e.value()),
+                    for folder in folders.read().iter() {
+                        option { value: "{folder.path}", "{folder.name}" }
+                    }
+                }
+            }
+            // }
+
+            div { class: "space-y-4 mb-20",
                 for album in results {
                     AlbumResultItem {
                         album,
                         selected_tracks,
-                        on_album_select_all: handle_album_select_all.clone(),
-                        on_track_toggle: handle_track_toggle.clone(),
+                        on_album_select_all: handle_album_select_all,
+                        on_track_toggle: handle_track_toggle,
                     }
                 }
             }
-            div { class: "flex justify-end mt-6",
+            div { class: "fixed bottom-8 right-8",
                 button {
-                    class: "bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed",
-                    disabled: selected_tracks.read().is_empty(),
+                    class: "bg-teal-600 hover:bg-teal-700 text-white font-bold p-4 rounded-full shadow-lg transition-transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center",
+                    disabled: selected_tracks.read().is_empty() || selected_folder.read().is_empty(),
                     onclick: handle_download,
-                    "Download Selected"
+                    svg {
+                        class: "w-6 h-6",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                        }
+                    }
                 }
             }
         }

@@ -1,0 +1,28 @@
+# Version Control
+.git/
+.gitignore
+
+# Build Artifacts
+target/
+node_modules/
+**/*.rs.bk
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Environment & Config
+.env
+.DS_Store
+*.swp
+
+# Local Data
+soulful.db
+soulful.db-shm
+soulful.db-wal
+
+# Documentation & Dev Scripts
+README.md
+css.sh
+clippy.toml

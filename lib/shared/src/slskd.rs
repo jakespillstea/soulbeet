@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadRequest {
     pub username: String,
     pub filename: String,
@@ -13,8 +14,144 @@ pub struct DownloadRequest {
 #[derive(Serialize, Deserialize)]
 pub struct DownloadResponse {
     pub id: String,
-    // pub track: TrackResult,
+    pub filename: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DownloadState {
+    Queued,
+    InProgress,
+    Succeeded,
+    Completed,
+    Aborted,
+    Cancelled,
+    Errored,
+    Unknown(String),
+}
+
+impl From<String> for DownloadState {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Queued" => DownloadState::Queued,
+            "InProgress" => DownloadState::InProgress,
+            "Succeeded" => DownloadState::Succeeded,
+            "Completed" => DownloadState::Completed,
+            "Aborted" => DownloadState::Aborted,
+            "Cancelled" => DownloadState::Cancelled,
+            "Errored" => DownloadState::Errored,
+            _ => DownloadState::Unknown(s),
+        }
+    }
+}
+
+// The exact structure of a single file entry
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FileEntry {
+    pub id: String,
+    pub username: String,
+    pub direction: String,
+    pub filename: String,
+    pub size: u64,
+    #[serde(default)]
+    pub start_offset: u64,
+    #[serde(deserialize_with = "deserialize_download_state")]
+    pub state: Vec<DownloadState>,
+    pub state_description: String,
+    pub requested_at: String,
+    pub enqueued_at: String,
+    #[serde(default)]
+    pub started_at: Option<String>,
+    #[serde(default)]
+    pub ended_at: Option<String>,
+    pub bytes_transferred: u64,
+    #[serde(default)]
+    pub average_speed: f64,
+    pub bytes_remaining: u64,
+    #[serde(default)]
+    pub elapsed_time: Option<String>,
+    pub percent_complete: f64,
+    #[serde(default)]
+    pub remaining_time: Option<String>,
+    #[serde(default)]
+    pub exception: Option<String>,
+}
+
+impl FileEntry {
+    pub fn get_state(&self) -> Vec<DownloadState> {
+        self.state.clone()
+    }
+}
+
+fn deserialize_download_state<'de, D>(deserializer: D) -> Result<Vec<DownloadState>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(s.split(',')
+        .map(|part| DownloadState::from(part.trim().to_string()))
+        .collect())
+}
+
+#[derive(Deserialize)]
+struct Directory {
+    files: Vec<FileEntry>,
+}
+
+#[derive(Deserialize)]
+struct User {
+    directories: Vec<Directory>,
+}
+
+// Custom deserializer that flattens everything into Vec<FileEntry>
+fn deserialize_flattened_files<'de, D>(deserializer: D) -> Result<Vec<FileEntry>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // First deserialize as generic JSON to traverse it manually
+    let v = Value::deserialize(deserializer)?;
+
+    let mut files = Vec::new();
+
+    if let Value::Array(users) = v {
+        for user in users {
+            if let Some(directories) = user.get("directories").and_then(|d| d.as_array()) {
+                for dir in directories {
+                    if let Some(dir_files) = dir.get("files").and_then(|f| f.as_array()) {
+                        for file in dir_files {
+                            let file_entry: FileEntry = serde_json::from_value(file.clone())
+                                .map_err(serde::de::Error::custom)?;
+                            files.push(file_entry);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+// Final struct you actually care about
+#[derive(Debug, Deserialize)]
+pub struct DownloadHistory {
+    #[serde(deserialize_with = "deserialize_flattened_files")]
+    pub files: Vec<FileEntry>,
+}
+
+pub struct FlattenedFiles(pub Vec<FileEntry>);
+
+impl<'de> Deserialize<'de> for FlattenedFiles {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserialize_flattened_files(deserializer).map(FlattenedFiles)
+    }
+}
+
+// Alias for backward compatibility if needed, or update usages
+pub type DownloadStatus = FileEntry;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MatchResult {
@@ -74,7 +211,7 @@ impl SearchResult {
     pub fn quality_score(&self) -> f64 {
         let quality_weights: HashMap<&str, f64> = [
             ("flac", 1.0),
-            ("wav", 0.95),
+            ("wav", 0.85),
             ("m4a", 0.65),
             ("aac", 0.65),
             ("mp3", 0.55),
