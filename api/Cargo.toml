@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
-soulful = { workspace = true, optional = true }
+soulbeet = { workspace = true, optional = true }
 shared = { workspace = true }
 chrono = { version = "0.4.42", features = ["wasm-bindgen"] }
 serde = { version = "1.0.226", features = ["derive"] }
@@ -34,7 +34,7 @@ dotenvy = "0.15.7"
 [features]
 default = []
 server = [
-  "dep:soulful",
+  "dep:soulbeet",
   "dep:sqlx",
   "dep:tokio",
   "dep:uuid",

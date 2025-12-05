@@ -22,7 +22,7 @@ COPY mobile/Cargo.toml mobile/
 COPY ui/Cargo.toml ui/
 COPY web/Cargo.toml web/
 COPY lib/shared/Cargo.toml lib/shared/
-COPY lib/soulful/Cargo.toml lib/soulful/
+COPY lib/soulbeet/Cargo.toml lib/soulbeet/
 
 # Copy source code
 COPY . .
@@ -65,7 +65,7 @@ COPY beets_config.yaml /app/beets_config.yaml
 RUN mkdir -p /data
 
 # Set environment variables
-ENV DATABASE_URL=sqlite:/data/soulful.db
+ENV DATABASE_URL=sqlite:/data/soulbeet.db
 ENV PORT=9765
 ENV IP=0.0.0.0
 

@@ -20,7 +20,7 @@ static POOL: OnceCell<Pool<Sqlite>> = OnceCell::const_new();
 pub async fn get_pool() -> &'static Pool<Sqlite> {
     POOL.get_or_init(|| async {
         let database_url =
-            std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:soulful.db".to_string());
+            std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:soulbeet.db".to_string());
 
         if database_url.starts_with("sqlite:") {
             let path_str = database_url.trim_start_matches("sqlite:");

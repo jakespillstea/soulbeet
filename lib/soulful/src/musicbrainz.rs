@@ -16,7 +16,7 @@ fn musicbrainz_client() -> &'static MusicBrainzClient {
     CLIENT.get_or_init(|| {
         let version = env!("CARGO_PKG_VERSION");
         MusicBrainzClient::new(&format!(
-            "Soulful/{version} ( https://github.com/terry90/soulful )"
+            "Soulbeet/{version} ( https://github.com/terry90/soulbeet )"
         ))
         .unwrap()
     })

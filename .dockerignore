@@ -18,9 +18,9 @@ docker-compose.yml
 *.swp
 
 # Local Data
-soulful.db
-soulful.db-shm
-soulful.db-wal
+soulbeet.db
+soulbeet.db-shm
+soulbeet.db-wal
 
 # Documentation & Dev Scripts
 README.md

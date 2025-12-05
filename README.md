@@ -1,24 +1,24 @@
-# Soulful
+# Soulbeet
 
-Soulful is a modern, self-hosted music downloader and manager. It bridges the gap between Soulseek (via `slskd`) and your music library (managed by `beets`), providing a seamless flow from search to streaming-ready library.
+Soulbeet is a modern, self-hosted music downloader and manager. It bridges the gap between Soulseek (via `slskd`) and your music library (managed by `beets`), providing a seamless flow from search to streaming-ready library.
 
 ## Features
 
 -   **Unified Search**: Search for albums and tracks using MusicBrainz metadata and find sources on Soulseek.
--   **One-Click Download & Import**: Select an album (or just some tracks), choose your target folder, and Soulful handles the rest.
+-   **One-Click Download & Import**: Select an album (or just some tracks), choose your target folder, and Soulbeet handles the rest.
 -   **Automated Importing**: Automatically monitors downloads and uses the `beets` CLI to tag, organize, and move files to your specified music folder.
 -   **User Management**: Multi-user support with private folders. Each user can manage their own music library paths. Or have a common folder.
 
 ## Architecture
 
-1.  **Soulful Web**: The main interface (Dioxus Fullstack).
-2.  **Slskd**: The Soulseek client backend. Soulful communicates with `slskd` to initiate and monitor downloads.
-3.  **Beets**: The music library manager. Soulful executes `beet import` to process finished downloads.
+1.  **Soulbeet Web**: The main interface (Dioxus Fullstack).
+2.  **Slskd**: The Soulseek client backend. Soulbeet communicates with `slskd` to initiate and monitor downloads.
+3.  **Beets**: The music library manager. Soulbeet executes `beet import` to process finished downloads.
 4.  **SQLite**: Stores user accounts and folder configurations. (PostgreSQL compat can be added easily, maybe in the future)
 
 ## Self-Hosting with Docker
 
-The recommended way to run Soulful is via Docker Compose. This ensures all dependencies (like `beets` and `python`) are correctly set up.
+The recommended way to run Soulbeet is via Docker Compose. This ensures all dependencies (like `beets` and `python`) are correctly set up.
 
 ### Prerequisites
 
@@ -30,17 +30,17 @@ The recommended way to run Soulful is via Docker Compose. This ensures all depen
 
 ```yaml
 services:
-  soulful:
-    image: soulful:latest
+  soulbeet:
+    image: soulbeet:latest
     build: .
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=sqlite:/data/soulful.db
+      - DATABASE_URL=sqlite:/data/soulbeet.db
       - SLSKD_URL=http://slskd:5030
       - SLSKD_API_KEY=your_slskd_api_key_here
-      # The path where slskd saves files (INSIDE the soulful container)
+      # The path where slskd saves files (INSIDE the soulbeet container)
       - SLSKD_DOWNLOAD_PATH=/downloads
       # Optional: Beets configuration
       - BEETS_CONFIG=/config/config.yaml
@@ -66,7 +66,7 @@ services:
       - "5030:5030"
 ```
 
-2.  **Important**: The `/downloads` volume must match between `slskd` and `soulful` so Soulful can see the files `slskd` downloaded.
+2.  **Important**: The `/downloads` volume must match between `slskd` and `soulbeet` so Soulbeet can see the files `slskd` downloaded.
 
 3.  Build and Run:
 
@@ -90,7 +90,7 @@ docker-compose up -d --build
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | Connection string for SQLite | `sqlite:soulful.db` |
+| `DATABASE_URL` | Connection string for SQLite | `sqlite:soulbeet.db` |
 | `SLSKD_URL` | URL of your Slskd instance | |
 | `SLSKD_API_KEY` | API Key for Slskd | |
 | `SLSKD_DOWNLOAD_PATH` | Path where Slskd downloads files | |
@@ -98,7 +98,7 @@ docker-compose up -d --build
 
 ### Beets Configuration
 
-Soulful uses `beets` to import music. You can mount a custom `config.yaml` to `/config/config.yaml` (or wherever you point `BEETS_CONFIG` to) to customize how beets behaves (plugins, naming formats, etc.).
+Soulbeet uses `beets` to import music. You can mount a custom `config.yaml` to `/config/config.yaml` (or wherever you point `BEETS_CONFIG` to) to customize how beets behaves (plugins, naming formats, etc.).
 
 Default `beet import` flags used:
 -   `-q`: Quiet mode (no user interaction)

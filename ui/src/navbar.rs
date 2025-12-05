@@ -9,7 +9,7 @@ pub fn Navbar(children: Element) -> Element {
                     div { class: "flex items-center gap-8",
                         div { class: "flex-shrink-0",
                             span { class: "text-teal-400 font-bold text-xl tracking-wider",
-                                "SOULFUL"
+                                "SOULBEET"
                             }
                         }
                         div { class: "flex items-baseline space-x-4", {children} }

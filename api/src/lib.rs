@@ -16,11 +16,11 @@ use shared::{
 #[cfg(feature = "server")]
 use shared::musicbrainz::Track;
 #[cfg(feature = "server")]
-use soulful::beets;
+use soulbeet::beets;
 #[cfg(feature = "server")]
-use soulful::musicbrainz;
+use soulbeet::musicbrainz;
 #[cfg(feature = "server")]
-use soulful::slskd::{SoulseekClient, SoulseekClientBuilder};
+use soulbeet::slskd::{SoulseekClient, SoulseekClientBuilder};
 
 #[cfg(feature = "server")]
 static SLSKD_CLIENT: LazyLock<SoulseekClient> = LazyLock::new(|| {

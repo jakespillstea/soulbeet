@@ -100,7 +100,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "shared",
- "soulful",
+ "soulbeet",
  "sqlx",
  "tokio",
  "tracing",
@@ -5450,7 +5450,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soulful"
+name = "soulbeet"
 version = "0.1.0"
 dependencies = [
  "async-trait",

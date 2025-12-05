@@ -9,9 +9,9 @@ node_modules
 **/*.rs.bk
 
 # Local Data
-soulful.db
-soulful.db-shm
-soulful.db-wal
+soulbeet.db
+soulbeet.db-shm
+soulbeet.db-wal
 
 # Env files
 **/.env

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ui", "web", "desktop", "mobile", "api", "lib/soulful"]
+members = ["ui", "web", "desktop", "mobile", "api", "lib/soulbeet"]
 
 [workspace.dependencies]
 dioxus = { version = "0.7.1" }
@@ -9,7 +9,7 @@ dioxus = { version = "0.7.1" }
 ui = { path = "ui" }
 api = { path = "api" }
 shared = { path = "lib/shared" }
-soulful = { path = "lib/soulful" }
+soulbeet = { path = "lib/soulbeet" }
 
 [profile]
 
