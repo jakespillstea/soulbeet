@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod db;
+pub mod models;
 
 use std::sync::LazyLock;
 
@@ -47,7 +48,7 @@ fn server_error<E: std::fmt::Display>(e: E) -> ServerFnError {
 
 #[server]
 pub async fn register(username: String, password: String) -> Result<(), ServerFnError> {
-    db::User::create(&username, &password)
+    models::user::User::create(&username, &password)
         .await
         .map_err(server_error)
         .map(|_| ())
@@ -55,7 +56,7 @@ pub async fn register(username: String, password: String) -> Result<(), ServerFn
 
 #[server]
 pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
-    let user = match db::User::verify(&username, &password).await {
+    let user = match models::user::User::verify(&username, &password).await {
         Ok(user) => user,
         Err(e) => return Err(server_error(e)),
     };
@@ -76,13 +77,51 @@ pub async fn refresh_token(token: String) -> Result<AuthResponse, ServerFnError>
 }
 
 #[server]
-pub async fn get_user_folders(token: String) -> Result<Vec<db::Folder>, ServerFnError> {
+pub async fn get_users(token: String) -> Result<Vec<models::user::User>, ServerFnError> {
+    let _claims = match auth::verify_token(&token, "access") {
+        Ok(c) => c,
+        Err(e) => return Err(server_error(e)),
+    };
+
+    models::user::User::get_all().await.map_err(server_error)
+}
+
+#[server]
+pub async fn update_user_password(
+    token: String,
+    user_id: String,
+    password: String,
+) -> Result<(), ServerFnError> {
+    let _claims = match auth::verify_token(&token, "access") {
+        Ok(c) => c,
+        Err(e) => return Err(server_error(e)),
+    };
+
+    models::user::User::update_password(&user_id, &password)
+        .await
+        .map_err(server_error)
+}
+
+#[server]
+pub async fn delete_user(token: String, user_id: String) -> Result<(), ServerFnError> {
+    let _claims = match auth::verify_token(&token, "access") {
+        Ok(c) => c,
+        Err(e) => return Err(server_error(e)),
+    };
+
+    models::user::User::delete(&user_id)
+        .await
+        .map_err(server_error)
+}
+
+#[server]
+pub async fn get_user_folders(token: String) -> Result<Vec<models::folder::Folder>, ServerFnError> {
     let claims = match auth::verify_token(&token, "access") {
         Ok(c) => c,
         Err(e) => return Err(server_error(e)),
     };
 
-    db::Folder::get_all_by_user(&claims.sub)
+    models::folder::Folder::get_all_by_user(&claims.sub)
         .await
         .map_err(server_error)
 }
@@ -92,7 +131,7 @@ pub async fn create_user_folder(
     token: String,
     name: String,
     path: String,
-) -> Result<db::Folder, ServerFnError> {
+) -> Result<models::folder::Folder, ServerFnError> {
     let claims = match auth::verify_token(&token, "access") {
         Ok(c) => c,
         Err(e) => return Err(server_error(e)),
@@ -102,7 +141,36 @@ pub async fn create_user_folder(
         return Err(server_error(format!("Failed to create directory: {}", e)));
     }
 
-    db::Folder::create(&claims.sub, &name, &path)
+    models::folder::Folder::create(&claims.sub, &name, &path)
+        .await
+        .map_err(server_error)
+}
+
+#[server]
+pub async fn update_folder(
+    token: String,
+    folder_id: String,
+    name: String,
+    path: String,
+) -> Result<(), ServerFnError> {
+    let _claims = match auth::verify_token(&token, "access") {
+        Ok(c) => c,
+        Err(e) => return Err(server_error(e)),
+    };
+
+    models::folder::Folder::update(&folder_id, &name, &path)
+        .await
+        .map_err(server_error)
+}
+
+#[server]
+pub async fn delete_folder(token: String, folder_id: String) -> Result<(), ServerFnError> {
+    let _claims = match auth::verify_token(&token, "access") {
+        Ok(c) => c,
+        Err(e) => return Err(server_error(e)),
+    };
+
+    models::folder::Folder::delete(&folder_id)
         .await
         .map_err(server_error)
 }

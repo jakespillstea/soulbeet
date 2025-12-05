@@ -37,9 +37,15 @@ fn App() -> Element {
 fn DesktopNavbar() -> Element {
     rsx! {
         Navbar {
-            Link { to: Route::Home {}, "Home" }
+            Link {
+                class: "text-gray-300 hover:text-teal-400 hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                to: Route::Home {},
+                "Home"
+            }
         }
 
-        Outlet::<Route> {}
+        main { class: "pt-24 pb-12 min-h-screen bg-gray-900",
+            div { class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8", Outlet::<Route> {} }
+        }
     }
 }

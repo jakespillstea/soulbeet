@@ -75,15 +75,25 @@ fn WebNavbar() -> Element {
 
     rsx! {
         Navbar {
-            Link { to: Route::Home {}, "Home" }
-            Link { to: Route::Settings {}, "Settings" }
+            Link {
+                class: "text-gray-300 hover:text-teal-400 hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                to: Route::Home {},
+                "Home"
+            }
+            Link {
+                class: "text-gray-300 hover:text-teal-400 hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                to: Route::Settings {},
+                "Settings"
+            }
             button {
-                class: "text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium",
+                class: "text-gray-300 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-md text-sm font-medium transition-colors ml-4",
                 onclick: logout,
                 "Logout"
             }
         }
 
-        Outlet::<Route> {}
+        main { class: "pt-24 pb-12 min-h-screen bg-gray-900",
+            div { class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8", Outlet::<Route> {} }
+        }
     }
 }
