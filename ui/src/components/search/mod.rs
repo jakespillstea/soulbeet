@@ -35,7 +35,8 @@ pub fn Search() -> Element {
     let download = move |query: DownloadQuery| async move {
         loading.set(true);
         viewing_album.set(None);
-        if let Ok(results) = api::search_downloads(token.read().clone(), query).await {
+        let token = token.read().clone();
+        if let Ok(results) = api::search_downloads(token, query).await {
             download_options.set(Some(results));
         }
         loading.set(false);
@@ -44,7 +45,8 @@ pub fn Search() -> Element {
     let download_tracks = move |(tracks, folder): (Vec<SlskdTrackResult>, String)| async move {
         loading.set(true);
         download_options.set(None);
-        if let Ok(_res) = api::download(token.read().clone(), tracks, folder).await {
+        let token = token.read().clone();
+        if let Ok(_res) = api::download(token, tracks, folder).await {
             info!("Downloads started");
         }
         loading.set(false);
@@ -52,8 +54,10 @@ pub fn Search() -> Element {
 
     let search_track = move || async move {
         loading.set(true);
+        let token = token.read().clone();
+
         if let Ok(data) = api::search_track(
-            token.read().clone(),
+            token,
             api::SearchQuery {
                 artist: artist(),
                 query: search(),
@@ -68,8 +72,10 @@ pub fn Search() -> Element {
 
     let search_album = move || async move {
         loading.set(true);
+        let token = token.read().clone();
+
         if let Ok(data) = api::search_album(
-            token.read().clone(),
+            token,
             api::SearchQuery {
                 artist: artist(),
                 query: search(),
@@ -84,7 +90,9 @@ pub fn Search() -> Element {
 
     let view_full_album = move |album_id: String| async move {
         loading.set(true);
-        if let Ok(album_data) = api::find_album(token.read().clone(), album_id.clone()).await {
+        let token = token.read().clone();
+
+        if let Ok(album_data) = api::find_album(token, album_id.clone()).await {
             viewing_album.set(Some(album_data));
         } else {
             info!("Failed to fetch album details for {}", album_id);

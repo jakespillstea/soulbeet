@@ -31,11 +31,10 @@ The recommended way to run Soulbeet is via Docker Compose. This ensures all depe
 ```yaml
 services:
   soulbeet:
-    image: soulbeet:latest
-    build: .
+    image: docker.io/docccccc/soulbeet:master
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - 9765:9765
     environment:
       - DATABASE_URL=sqlite:/data/soulbeet.db
       - SLSKD_URL=http://slskd:5030
@@ -51,9 +50,11 @@ services:
       - /path/to/slskd/downloads:/downloads
       # Map your music libraries (where beets will move files to)
       - /path/to/music:/music
+    # Optional
     depends_on:
       - slskd
 
+  # Optional
   # Example slskd service if you don't have one running
   slskd:
     image: slskd/slskd
