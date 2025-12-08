@@ -352,7 +352,7 @@ impl SoulseekClient {
         let stream = stream.flat_map(|res| {
             let items = match res {
                 Ok(albums) => albums
-                    .chunks(25)
+                    .chunks(10)
                     .map(|c| Ok(c.to_vec()))
                     .collect::<Vec<_>>(),
                 Err(e) => vec![Err(e)],
