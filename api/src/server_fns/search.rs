@@ -11,8 +11,6 @@ use shared::{
 };
 
 #[cfg(feature = "server")]
-use shared::musicbrainz::Track;
-#[cfg(feature = "server")]
 use soulbeet::musicbrainz;
 
 use super::server_error;
