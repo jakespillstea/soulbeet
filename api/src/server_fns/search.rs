@@ -82,7 +82,7 @@ pub async fn search_downloads(
         while let Some(result) = stream.next().await {
             match result {
                 Ok(albums) => {
-                    if let Err(err) = tx.unbounded_send(batch) {
+                    if let Err(err) = tx.unbounded_send(albums) {
                         info!("Client disconnected, stopping stream: {:?}", err);
                         break;
                     }
