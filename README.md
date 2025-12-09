@@ -131,3 +131,5 @@ Default `beet import` flags used:
 - Improve slskd search. Currently:
   - Single track search, query: "{artist} {track_title}" -> more resilient
   - Multiple tracks search, query: "{artist} {album}" -> best for metadata and grouping tracks by album
+- Listenbrainz integration to autodownload suggestions
+- Complete library manager, removal of tracks
