@@ -61,7 +61,7 @@ pub async fn find_album(id: String) -> Result<AlbumWithTracks, ServerFnError> {
 #[post("/api/slskd/search", _: AuthSession)]
 pub async fn search_downloads(
     data: DownloadQuery,
-) -> Result<Streaming<Vec<AlbumResult>, CborEncoding>, ServerFnError> {
+) -> Result<Streaming<AlbumResult, CborEncoding>, ServerFnError> {
     let artist = data.album.artist;
     let album = data.album.title;
     let tracks = data.tracks;
@@ -82,9 +82,11 @@ pub async fn search_downloads(
         while let result = stream.try_next().await {
             match result {
                 Ok(Some(albums)) => {
-                    if let Err(err) = tx.unbounded_send(albums) {
-                        info!("Client disconnected, stopping stream: {:?}", err);
-                        break;
+                    for album in albums {
+                        if let Err(err) = tx.unbounded_send(album) {
+                            info!("Client disconnected, stopping stream: {:?}", err);
+                            return;
+                        }
                     }
                 }
                 Ok(None) => {

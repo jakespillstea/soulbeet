@@ -54,19 +54,17 @@ pub fn Search() -> Element {
         if let Ok(mut stream) = auth.call(api::search_downloads(query)).await {
             while let Some(res) = stream.next().await {
                 match res {
-                    Ok(new_results) => {
+                    Ok(new_album) => {
                         download_options.with_mut(|current| {
                             if let Some(list) = current {
-                                for new_album in new_results {
-                                    if let Some(pos) = list.iter().position(|x| {
-                                        x.username == new_album.username
-                                            && x.album_path == new_album.album_path
-                                    }) {
-                                        // Safeguard against incomplete albums
-                                        list[pos] = new_album;
-                                    } else {
-                                        list.push(new_album);
-                                    }
+                                if let Some(pos) = list.iter().position(|x| {
+                                    x.username == new_album.username
+                                        && x.album_path == new_album.album_path
+                                }) {
+                                    // Safeguard against incomplete albums
+                                    list[pos] = new_album;
+                                } else {
+                                    list.push(new_album);
                                 }
 
                                 // Resort new results by score
