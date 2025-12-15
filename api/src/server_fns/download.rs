@@ -79,11 +79,11 @@ async fn import_track(
                 skipped_entry.state = vec![DownloadState::ImportSkipped];
                 let _ = tx.send(vec![skipped_entry]);
             }
-            Ok(beets::ImportResult::Failed) => {
+            Ok(beets::ImportResult::Failed(err)) => {
                 info!("Beet import failed item");
                 let mut failed_entry = entry.clone();
                 failed_entry.state = vec![DownloadState::ImportFailed];
-                failed_entry.state_description = "Beet import failed".to_string();
+                failed_entry.state_description = format!("Beet import failed: {err}");
                 let _ = tx.send(vec![failed_entry]);
             }
             Err(e) => {

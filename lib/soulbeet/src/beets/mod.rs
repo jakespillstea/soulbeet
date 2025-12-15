@@ -5,7 +5,7 @@ use tracing::info;
 pub enum ImportResult {
     Success,
     Skipped,
-    Failed,
+    Failed(String),
 }
 
 pub async fn import(sources: Vec<String>, target: &Path) -> Result<ImportResult> {
@@ -46,6 +46,6 @@ pub async fn import(sources: Vec<String>, target: &Path) -> Result<ImportResult>
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         info!("Beet import failed: {}", stderr);
-        Ok(ImportResult::Failed)
+        Ok(ImportResult::Failed(stderr.to_string()))
     }
 }

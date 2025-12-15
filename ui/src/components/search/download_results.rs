@@ -45,7 +45,7 @@ fn AlbumResultItem(props: AlbumResultItemProps) -> Element {
             ul { class: "space-y-1",
                 for TrackResult { base , title , .. } in props.album.tracks {
                     li {
-                        key: "{base.filename}",
+                        key: "{base.filename}{base.username}",
                         class: "flex items-center gap-2 p-1 rounded-md hover:bg-white/10 cursor-pointer",
                         onclick: move |_| props.on_track_toggle.call(base.filename.clone()),
 
