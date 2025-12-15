@@ -248,7 +248,7 @@ pub async fn download(
                         d.state.iter().any(|s| {
                             matches!(
                                 s,
-                                DownloadState::Completed
+                                DownloadState::Downloaded
                                     | DownloadState::Aborted
                                     | DownloadState::Cancelled
                                     | DownloadState::Errored
@@ -262,7 +262,7 @@ pub async fn download(
                             .filter(|d| {
                                 d.state
                                     .iter()
-                                    .any(|s| matches!(s, DownloadState::Completed))
+                                    .any(|s| matches!(s, DownloadState::Downloaded))
                             })
                             .cloned()
                             .collect();

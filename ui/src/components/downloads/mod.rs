@@ -16,8 +16,21 @@ pub struct DownloadsProps {
 pub fn Downloads(mut props: DownloadsProps) -> Element {
     let mut active_downloads: Vec<FileEntry> = props.downloads.read().values().cloned().collect();
     active_downloads.sort_by(|a, b| b.enqueued_at.cmp(&a.enqueued_at));
-
-    let _active_count = active_downloads.len();
+    active_downloads.sort_by(|a, b| {
+        let a_state = a
+            .state
+            .first()
+            .cloned()
+            .unwrap_or(DownloadState::Unknown("".into()));
+        let b_state = b
+            .state
+            .first()
+            .cloned()
+            .unwrap_or(DownloadState::Unknown("".into()));
+        b_state
+            .partial_cmp(&a_state)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Count specific states for the header summary
     let processing_count = active_downloads
@@ -30,7 +43,10 @@ pub fn Downloads(mut props: DownloadsProps) -> Element {
                 .unwrap_or(DownloadState::Unknown("".into()));
             matches!(
                 state,
-                DownloadState::Queued | DownloadState::InProgress | DownloadState::Importing
+                DownloadState::Queued
+                    | DownloadState::InProgress
+                    | DownloadState::Importing
+                    | DownloadState::Downloaded // Still needs to be imported
             )
         })
         .count();
@@ -67,7 +83,7 @@ pub fn Downloads(mut props: DownloadsProps) -> Element {
                 DownloadState::Queued
                     | DownloadState::InProgress
                     | DownloadState::Importing
-                    | DownloadState::Completed // Downloads that are completed but not yet imported
+                    | DownloadState::Downloaded // Downloads that are completed but not yet imported
             )
         });
     };

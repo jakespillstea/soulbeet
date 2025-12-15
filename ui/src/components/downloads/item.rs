@@ -22,11 +22,11 @@ pub fn DownloadItem(file: FileEntry) -> Element {
             "bg-blue-500/20 text-blue-300",
             "SLSK",
         ),
-        DownloadState::Completed => (
+        DownloadState::Downloaded => (
             "Completed",
             "border-beet-leaf/50",
             "bg-beet-leaf/20 text-beet-leaf",
-            "DONE",
+            "DOWNLOADED",
         ),
         DownloadState::Importing => (
             "Importing...",

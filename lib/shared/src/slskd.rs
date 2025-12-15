@@ -22,19 +22,19 @@ pub struct DownloadResponse {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum DownloadState {
-    Queued,
     InProgress,
-    Completed,
+    Importing,
+    Queued,
+    Downloaded,
+    Imported,
+    Unknown(String),
     Aborted,
     Cancelled,
     Errored,
-    Importing,
-    Imported,
     ImportSkipped,
     ImportFailed,
-    Unknown(String),
 }
 
 impl From<String> for DownloadState {
@@ -42,7 +42,7 @@ impl From<String> for DownloadState {
         match s.as_str() {
             "Queued" => DownloadState::Queued,
             "InProgress" => DownloadState::InProgress,
-            "Completed" => DownloadState::Completed,
+            "Completed" => DownloadState::Downloaded,
             "Aborted" => DownloadState::Aborted,
             "Cancelled" => DownloadState::Cancelled,
             "Errored" => DownloadState::Errored,
