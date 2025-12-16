@@ -121,13 +121,43 @@ fn WebNavbar() -> Element {
                     active_class: "border-beet-accent",
                     to: Route::SearchPage {},
                     onclick: move |_| search_reset += 1,
-                    "Search"
+                    span { class: "hidden md:block", "Search" }
+                    svg {
+                        class: "md:hidden w-6 h-6",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                        }
+                    }
                 }
                 Link {
                     class: "nav-link text-white font-medium border-b-2 border-transparent hover:border-beet-accent pb-0.5",
                     active_class: "border-beet-accent",
                     to: Route::SettingsPage {},
-                    "Settings"
+                    span { class: "hidden md:block", "Settings" }
+                    svg {
+                        class: "md:hidden w-6 h-6",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z",
+                        }
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M15 12a3 3 0 11-6 0 3 3 0 016 0z",
+                        }
+                    }
                 }
 
                 // Separator
@@ -165,7 +195,7 @@ fn WebNavbar() -> Element {
                 }
             }
 
-            main { class: "flex-grow flex flex-col relative overflow-y-auto w-full py-8 no-scrollbar",
+            main { class: "px-4 sm:px-6 lg:px-8 flex-grow flex flex-col relative overflow-y-auto w-full py-8 no-scrollbar",
                 Outlet::<Route> {}
             }
             Downloads { is_open: downloads_open, downloads }

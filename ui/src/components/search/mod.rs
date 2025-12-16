@@ -197,8 +197,8 @@ pub fn Search() -> Element {
         // Search bar
         div { class: "w-full relative group",
 
-          div { class: "absolute -inset-1 bg-gradient-to-r from-beet-accent to-beet-leaf rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" }
-          div { class: "relative flex items-center bg-beet-dark border border-white/10 rounded-lg p-2 shadow-2xl",
+          div { class: "absolute -inset-1 bg-gradient-to-r from-beet-accent to-beet-leaf rounded-t-lg rounded-b-0 md:rounded-b-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" }
+          div { class: "relative flex items-center bg-beet-dark border border-white/10 rounded-t-lg rounded-b-0 md:rounded-b-lg p-2 shadow-2xl",
             div { class: "pl-4 pr-2 text-gray-500",
               svg {
                 class: "w-6 h-6",
@@ -226,12 +226,40 @@ pub fn Search() -> Element {
               },
             }
 
-            div { class: "h-8 w-px bg-white/10 mx-2" }
-
+            div { class: "hidden md:flex h-8 w-px bg-white/10 mx-2" }
             input {
               "type": "text",
               value: "{artist.read().clone().unwrap_or_default()}",
-              class: "w-1/3 bg-transparent border-none focus:ring-0 text-gray-400 text-sm placeholder-gray-700 font-mono h-10 focus:outline-none",
+              class: "hidden md:flex w-1/3 bg-transparent border-none focus:ring-0 text-gray-400 text-sm placeholder-gray-700 font-mono h-10 focus:outline-none",
+              placeholder: "Artist (opt)",
+              oninput: move |event| {
+                  let val = event.value();
+                  if val.is_empty() { artist.set(None) } else { artist.set(Some(val)) }
+              },
+              onkeydown: move |event| {
+                  if event.key() == Key::Enter {
+                      spawn(perform_search());
+                  }
+              },
+            }
+            div { class: "hidden md:flex",
+              SearchTypeToggle { search_type }
+              Button {
+                class: "rounded ml-2 whitespace-nowrap",
+                disabled: loading() || search.read().is_empty(),
+                onclick: move |_| {
+                    spawn(perform_search());
+                },
+                "SEARCH"
+              }
+            }
+          }
+          // Mobile search bar
+          div { class: "md:hidden relative flex items-center bg-beet-dark border border-t-0 md:border-t border-white/10 rounded-b-lg rounded-t-0 md:rounded-t-lg p-2 shadow-2xl",
+            input {
+              "type": "text",
+              value: "{artist.read().clone().unwrap_or_default()}",
+              class: "w-full pl-4 bg-transparent border-none focus:ring-0 text-gray-400 text-sm placeholder-gray-700 font-mono h-10 focus:outline-none",
               placeholder: "Artist (opt)",
               oninput: move |event| {
                   let val = event.value();
@@ -275,7 +303,7 @@ pub fn Search() -> Element {
         } else {
           match *response.read() {
               Some(ref items) if !items.is_empty() => rsx! {
-                div { class: "w-full bg-beet-panel/50 border border-white/5 rounded-xl p-6 backdrop-blur-sm mt-8",
+                div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8",
                   h5 { class: "text-xl font-display font-bold mb-4 border-b border-white/10 pb-2 text-white",
                     "Search Results"
                   }

@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn Navbar(children: Element) -> Element {
     rsx! {
-        header { class: "flex justify-between items-center py-6 border-b border-white/5",
+        header { class: "px-4 sm:px-6 lg:px-8 flex justify-between items-center py-6 border-b border-white/5",
             // Logo area
             div { class: "flex items-center gap-3 group cursor-default",
                 div { class: "w-10 h-10 bg-beet-accent rounded-sm flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.5)] group-hover:rotate-12 transition-transform",
@@ -20,7 +20,7 @@ pub fn Navbar(children: Element) -> Element {
                         }
                     }
                 }
-                h1 { class: "text-2xl font-bold tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400",
+                h1 { class: "hidden md:block text-2xl font-bold tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400",
                     "Soulbeet"
                 }
             }
