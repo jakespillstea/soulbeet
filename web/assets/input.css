@@ -60,6 +60,10 @@
     }
 }
 
+html {
+    @apply text-sm md:text-base;
+}
+
 /* Base Styles */
 body {
     @apply bg-beet-dark text-white min-h-screen overflow-hidden font-display;
