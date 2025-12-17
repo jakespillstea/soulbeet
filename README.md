@@ -1,9 +1,11 @@
 # Soulbeet
 
-<img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/docccccc/soulbeet?link=https%3A%2F%2Fhub.docker.com%2Frepository%2Fdocker%2Fdocccccc%2Fsoulbeet%2Fgeneral"> <img alt="Docker Image Size" src="https://img.shields.io/docker/image-size/docccccc/soulbeet?link=https%3A%2F%2Fhub.docker.com%2Frepository%2Fdocker%2Fdocccccc%2Fsoulbeet%2Fgeneral"> <img alt="Docker Image Version" src="https://img.shields.io/docker/v/docccccc/soulbeet?link=https%3A%2F%2Fhub.docker.com%2Frepository%2Fdocker%2Fdocccccc%2Fsoulbeet%2Fgeneral">
+[![Docker Pulls](https://img.shields.io/docker/pulls/docccccc/soulbeet)](https://hub.docker.com/repository/docker/docccccc/soulbeet/general)
+[![Docker Image Size](https://img.shields.io/docker/image-size/docccccc/soulbeet)](https://hub.docker.com/repository/docker/docccccc/soulbeet/general)
+[![Docker Image Version](https://img.shields.io/docker/v/docccccc/soulbeet)](https://hub.docker.com/repository/docker/docccccc/soulbeet/general)
 
-
-<img alt="GitHub License" src="https://img.shields.io/github/license/terry90/soulbeet?link=https%3A%2F%2Fgithub.com%2Fterry90%2Fsoulbeet"> <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/terry90/soulbeet?link=https%3A%2F%2Fgithub.com%2Fterry90%2Fsoulbeet">
+[![GitHub License](https://img.shields.io/github/license/terry90/soulbeet)](https://github.com/terry90/soulbeet)
+[![GitHub Repo stars](https://img.shields.io/github/stars/terry90/soulbeet)](https://github.com/terry90/soulbeet)
 
 Soulbeet is a modern, self-hosted music downloader and manager. It bridges the gap between Soulseek (via `slskd`) and your music library (managed by `beets`), providing a seamless flow from search to streaming-ready library.
 
