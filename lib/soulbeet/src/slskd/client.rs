@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use reqwest::{Client, Method, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared::{
-    musicbrainz::Track,
+    musicbrainz::{Album, Track},
     slskd::{AlbumResult, DownloadResponse, FileEntry, FlattenedFiles, SearchState, TrackResult},
 };
 use std::{collections::HashMap, path::Path, sync::Arc};
@@ -20,7 +20,7 @@ const MAX_SEARCH_RESULTS: usize = 50;
 #[derive(Debug, Clone)]
 struct SearchContext {
     artist: String,
-    album: String,
+    album: Option<String>,
     track_titles: Vec<String>,
     start_time: DateTime<Utc>,
     timeout: Duration,
@@ -166,8 +166,7 @@ impl SoulseekClient {
 
     pub async fn start_search(
         &self,
-        artist: String,
-        album: String,
+        album: Option<Album>,
         tracks: Vec<Track>,
         timeout: Duration,
     ) -> Result<String> {
@@ -175,9 +174,13 @@ impl SoulseekClient {
 
         let track_titles: Vec<String> = tracks.iter().map(|t| t.title.clone()).collect();
 
-        let query = match tracks.len() {
-            1 => format!("{} {}", artist.trim(), tracks[0].title.trim()),
-            _ => format!("{} {}", artist.trim(), album.trim()),
+        let query = match album {
+            Some(ref album) => match tracks.len() {
+                1 => format!("{} {}", album.artist.trim(), tracks[0].title.trim()),
+                _ => format!("{} {}", album.artist.trim(), album.title.trim()),
+            },
+            // No album, should be a single track search
+            None => format!("{} {}", tracks[0].artist.trim(), tracks[0].title.trim()),
         };
 
         info!(
@@ -213,8 +216,11 @@ impl SoulseekClient {
         self.active_searches.lock().await.insert(
             search_id.clone(),
             SearchContext {
-                artist,
-                album,
+                album: album.as_ref().map(|a| a.title.clone()),
+                artist: album
+                    .as_ref()
+                    .map(|a| a.artist.clone())
+                    .unwrap_or_else(|| tracks[0].artist.clone()),
                 track_titles,
                 start_time: Utc::now(),
                 timeout,
@@ -274,7 +280,7 @@ impl SoulseekClient {
                         let mut albums = processing::process_search_responses(
                             &current_responses,
                             &context.artist,
-                            &context.album,
+                            context.album.as_deref(),
                             &track_titles_ref,
                         );
 

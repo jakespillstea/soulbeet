@@ -9,7 +9,7 @@ pub fn DownloadItem(file: FileEntry) -> Element {
         .cloned()
         .unwrap_or(DownloadState::Unknown("Unknown".into()));
 
-    let (_status_text, border_class, badge_class, badge_text) = match &state {
+    let (status_text, border_class, badge_class, badge_text) = match &state {
         DownloadState::Queued => (
             "Queued",
             "border-white/5 opacity-60",
@@ -85,7 +85,7 @@ pub fn DownloadItem(file: FileEntry) -> Element {
           }
           span {
             class: "text-[10px] font-mono {badge_class} px-1.5 py-0.5 rounded uppercase cursor-help",
-            title: "{file.state_description}",
+            title: "{status_text}",
             "{badge_text}"
           }
         }

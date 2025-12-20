@@ -74,11 +74,16 @@ pub fn Album(props: Props) -> Element {
                     props
                         .on_select
                         .call(DownloadQuery {
-                            album,
+                            album: Some(album),
                             tracks: props.data.tracks.clone(),
                         });
                 } else {
-                    props.on_select.call(DownloadQuery { album, tracks });
+                    props
+                        .on_select
+                        .call(DownloadQuery {
+                            album: Some(album),
+                            tracks,
+                        });
                 }
             },
         }

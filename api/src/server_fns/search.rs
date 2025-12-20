@@ -57,17 +57,11 @@ pub async fn find_album(id: String) -> Result<AlbumWithTracks, ServerFnError> {
 
 #[post("/api/slskd/search/start", _: AuthSession)]
 pub async fn start_download_search(data: DownloadQuery) -> Result<String, ServerFnError> {
-    let artist = data.album.artist;
-    let album = data.album.title;
+    let album = data.album;
     let tracks = data.tracks;
 
     SLSKD_CLIENT
-        .start_search(
-            artist,
-            album,
-            tracks,
-            Duration::seconds(SLSKD_MAX_SEARCH_DURATION),
-        )
+        .start_search(album, tracks, Duration::seconds(SLSKD_MAX_SEARCH_DURATION))
         .await
         .map_err(server_error)
 }

@@ -27,7 +27,7 @@ use search_type_toggle::{SearchType, SearchTypeToggle};
 #[component]
 pub fn Search() -> Element {
     let auth = use_auth();
-    let mut response = use_signal::<Option<Vec<SearchResult>>>(|| None);
+    let mut search_results = use_signal::<Option<Vec<SearchResult>>>(|| None);
     let mut search = use_signal(String::new);
     let mut artist = use_signal::<Option<String>>(|| None);
     let mut search_type = use_signal(|| SearchType::Album);
@@ -50,12 +50,13 @@ pub fn Search() -> Element {
     use_effect(move || {
         if let Some(reset) = search_reset {
             if reset.0() > 0 {
-                response.set(None);
+                search_results.set(None);
                 search.set(String::new());
                 artist.set(None);
                 search_type.set(SearchType::Album);
                 viewing_album.set(None);
                 download_options.set(None);
+                loading.set(false);
             }
         }
     });
@@ -132,6 +133,7 @@ pub fn Search() -> Element {
 
     let perform_search = move || async move {
         loading.set(true);
+        download_options.set(None);
 
         let query_data = api::SearchQuery {
             artist: artist(),
@@ -144,7 +146,7 @@ pub fn Search() -> Element {
         };
 
         if let Ok(data) = result {
-            response.set(Some(data));
+            search_results.set(Some(data));
         }
         loading.set(false);
     };
@@ -301,7 +303,7 @@ pub fn Search() -> Element {
             div { class: "animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-beet-accent" }
           }
         } else {
-          match *response.read() {
+          match &*search_results.read() {
               Some(ref items) if !items.is_empty() => rsx! {
                 div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8",
                   h5 { class: "text-xl font-display font-bold mb-4 border-b border-white/10 pb-2 text-white",
@@ -310,26 +312,43 @@ pub fn Search() -> Element {
                   ul { class: "list-none p-0 space-y-4",
                     for item in items.iter() {
                       match item {
-                          SearchResult::Track(ref track) => rsx! {
-                            li { key: "{track.id}",
-                              TrackResult {
-                                on_album_click: move |id| {
-                                    spawn(view_full_album(id));
-                                },
-                                track: track.clone(),
+                          SearchResult::Track(ref track) => {
+                              let track_clone = track.clone();
+                              let track_clone_2 = track.clone();
+                              rsx! {
+                                li { key: "{track.id}",
+                                  TrackResult {
+                                    on_track_click: move || {
+                                        spawn(download(DownloadQuery::from(track_clone.clone())));
+                                    },
+                                    on_album_click: move || {
+                                        spawn(
+                                            view_full_album(
+                                                track_clone_2
+                                                    .album_id
+                                                    .clone()
+                                                    .expect("This callback should not be callable without an album"),
+                                            ),
+                                        );
+                                    },
+                                    track: track.clone(),
+                                  }
+                                }
                               }
-                            }
-                          },
-                          SearchResult::Album(album) => rsx! {
-                            li { key: "{album.id}",
-                              AlbumResult {
-                                on_click: move |id| {
-                                    spawn(view_full_album(id));
-                                },
-                                album: album.clone(),
+                          }
+                          SearchResult::Album(ref album) => {
+                              let album_clone = album.clone();
+                              rsx! {
+                                li { key: "{album.id}",
+                                  AlbumResult {
+                                    on_click: move || {
+                                        spawn(view_full_album(album_clone.id.clone()));
+                                    },
+                                    album: album.clone(),
+                                  }
+                                }
                               }
-                            }
-                          },
+                          }
                       }
                     }
                   }

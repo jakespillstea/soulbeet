@@ -8,7 +8,7 @@ use std::path::Path;
 pub fn process_search_responses(
     responses: &[SearchResponse],
     searched_artist: &str,
-    searched_album: &str,
+    searched_album: Option<&str>,
     expected_tracks: &[&str],
 ) -> Vec<AlbumResult> {
     const MIN_SCORE_THRESHOLD: f64 = 0.6;
@@ -36,7 +36,7 @@ pub fn process_search_responses(
                 let rank_result = utils::rank_match(
                     &file.filename,
                     Some(searched_artist),
-                    Some(searched_album),
+                    searched_album,
                     expected_tracks,
                 );
 
