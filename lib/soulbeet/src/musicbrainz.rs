@@ -131,7 +131,9 @@ pub async fn search(
                 .await?;
 
             for release_group in search_results.entities {
-                if release_group.primary_type != Some(ReleaseGroupPrimaryType::Album) {
+                if release_group.primary_type != Some(ReleaseGroupPrimaryType::Album)
+                    && release_group.primary_type != Some(ReleaseGroupPrimaryType::Ep)
+                {
                     continue;
                 }
 

@@ -30,6 +30,8 @@ Screenshots: [here](./screenshots)
 
 The recommended way to run Soulbeet is via Docker Compose. This ensures all dependencies (like `beets` and `python`) are correctly set up.
 
+**Compatibility:** The Docker image supports both **AMD64** and **ARM64** architectures.
+
 ### Prerequisites
 
 -   Docker & Docker Compose (or podman-compose)
