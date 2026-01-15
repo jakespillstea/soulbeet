@@ -134,15 +134,47 @@ pub async fn download(
         return Ok(res);
     }
 
+    // Send initial "Queued" state immediately so UI shows the downloads right away
+    let queued_entries: Vec<FileEntry> = successful
+        .iter()
+        .map(|d| FileEntry {
+            id: Uuid::new_v4().to_string(),
+            username: d.username.clone(),
+            direction: "Download".to_string(),
+            filename: d.filename.clone(),
+            size: d.size,
+            start_offset: 0,
+            state: vec![DownloadState::Queued],
+            state_description: "Queued for download".to_string(),
+            requested_at: Utc::now().to_rfc3339(),
+            enqueued_at: Some(Utc::now().to_rfc3339()),
+            started_at: None,
+            ended_at: None,
+            bytes_transferred: 0,
+            average_speed: 0.0,
+            bytes_remaining: d.size,
+            elapsed_time: None,
+            percent_complete: 0.0,
+            remaining_time: None,
+            exception: None,
+        })
+        .collect();
+
+    let _ = tx.send(queued_entries);
+
     info!("Started monitoring downloads: {:?}", download_filenames);
 
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
         let mut attempts = 0;
+        let mut consecutive_empty = 0;
         const MAX_ATTEMPTS: usize = 600; // ~20 minutes timeout
+        const MAX_CONSECUTIVE_EMPTY: usize = 5; // Allow some grace period for downloads to appear
+
+        // Poll immediately on first iteration, then wait for interval
+        interval.tick().await;
 
         loop {
-            interval.tick().await;
             attempts += 1;
 
             if attempts > MAX_ATTEMPTS {
@@ -155,6 +187,13 @@ pub async fn download(
 
             match SLSKD_CLIENT.get_all_downloads().await {
                 Ok(downloads) => {
+                    // Debug: log what slskd returns vs what we're looking for
+                    if attempts <= 2 {
+                        info!("Looking for filenames: {:?}", download_filenames);
+                        let slskd_filenames: Vec<_> = downloads.iter().map(|f| &f.filename).collect();
+                        info!("slskd returned {} downloads: {:?}", downloads.len(), slskd_filenames);
+                    }
+
                     let batch_status: Vec<_> = downloads
                         .iter()
                         .filter(|file| download_filenames.contains(&file.filename))
@@ -163,12 +202,19 @@ pub async fn download(
 
                     if !batch_status.is_empty() {
                         let _ = tx.send(batch_status.clone());
+                        consecutive_empty = 0; // Reset counter when we find downloads
                     }
 
-                    // If we can't find any of our downloads, they might have been cleared or invalid
+                    // Allow grace period for downloads to appear in slskd
                     if batch_status.is_empty() {
-                        info!("No active downloads found for batch, assuming completed or lost.");
-                        break;
+                        consecutive_empty += 1;
+                        if consecutive_empty >= MAX_CONSECUTIVE_EMPTY {
+                            info!("No active downloads found for batch after {} attempts, assuming completed or lost.", MAX_CONSECUTIVE_EMPTY);
+                            break;
+                        }
+                        info!("No downloads found yet, attempt {}/{}", consecutive_empty, MAX_CONSECUTIVE_EMPTY);
+                        interval.tick().await;
+                        continue;
                     }
 
                     // TODO: Parallelize imports, do not wait for all to finish downloading before starting imports
@@ -204,6 +250,9 @@ pub async fn download(
                     info!("Error fetching download status: {}", e);
                 }
             }
+
+            // Wait before next poll
+            interval.tick().await;
         }
     });
 

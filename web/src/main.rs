@@ -96,7 +96,9 @@ fn WebNavbar() -> Element {
                     while let Some(Ok(data)) = s.next().await {
                         let mut map = downloads.write();
                         for file in data {
-                            map.insert(file.id.clone(), file);
+                            // Use filename as key for consistent deduplication
+                            // (initial queued entries and slskd responses share the same filename)
+                            map.insert(file.filename.clone(), file);
                         }
                     }
                 }
