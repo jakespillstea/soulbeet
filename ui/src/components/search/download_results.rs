@@ -91,6 +91,7 @@ pub fn DownloadResults(props: Props) -> Element {
     let results = props.results.clone();
     let mut folders = use_signal(std::vec::Vec::new);
     let mut selected_folder = use_signal(|| "".to_string());
+    let mut is_downloading = use_signal(|| false);
     let auth = use_auth();
 
     use_future(move || async move {
@@ -136,6 +137,12 @@ pub fn DownloadResults(props: Props) -> Element {
     };
 
     let handle_download = move |_| {
+        // Prevent double-clicks by checking if already downloading
+        if *is_downloading.read() {
+            info!("Download already in progress, ignoring click");
+            return;
+        }
+
         let selected_ids = selected_tracks.read();
 
         let tracks_to_download: Vec<TrackResult> = props
@@ -145,6 +152,14 @@ pub fn DownloadResults(props: Props) -> Element {
             .filter(|track| selected_ids.contains(&get_track_id(track)))
             .cloned()
             .collect();
+
+        if tracks_to_download.is_empty() {
+            return;
+        }
+
+        // Set downloading state immediately to prevent double-clicks
+        is_downloading.set(true);
+
         props
             .on_download
             .call((tracks_to_download, selected_folder()));
@@ -194,18 +209,23 @@ pub fn DownloadResults(props: Props) -> Element {
             div { class: "fixed bottom-8 right-8",
                 button {
                     class: "bg-beet-accent hover:bg-fuchsia-400 text-white font-bold p-4 rounded-full shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center cursor-pointer",
-                    disabled: selected_tracks.read().is_empty() || selected_folder.read().is_empty(),
+                    disabled: selected_tracks.read().is_empty() || selected_folder.read().is_empty() || *is_downloading.read(),
                     onclick: handle_download,
-                    svg {
-                        class: "w-6 h-6",
-                        fill: "none",
-                        stroke: "currentColor",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            stroke_width: "2",
-                            d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                    if *is_downloading.read() {
+                        // Show spinner when downloading
+                        div { class: "animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-white" }
+                    } else {
+                        svg {
+                            class: "w-6 h-6",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                            }
                         }
                     }
                 }

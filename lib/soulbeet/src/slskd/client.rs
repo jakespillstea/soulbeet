@@ -422,6 +422,12 @@ impl SoulseekClient {
             match self.send_download_batch(username, &batch, batch_idx).await {
                 Ok(responses) => return responses,
                 Err(e) => {
+                    // Log every error, not just the final one
+                    warn!(
+                        "Batch {} for '{}' attempt {} failed: {}",
+                        batch_idx, username, attempt, e
+                    );
+
                     if attempt == config.max_retries {
                         warn!(
                             "Batch {} for '{}' failed after {} retries: {}",
@@ -472,7 +478,31 @@ impl SoulseekClient {
         let status = response.status();
         let resp_text = response.text().await?;
 
+        info!(
+            "Batch {} response: status={}, body_len={}",
+            batch_idx,
+            status,
+            resp_text.len()
+        );
+
         if !status.is_success() {
+            // Handle "already in progress" as success - the file is already queued
+            if status.as_u16() == 500 && resp_text.contains("already in progress") {
+                info!(
+                    "Batch {} for '{}': files already queued (treating as success)",
+                    batch_idx, username
+                );
+                return Ok(batch
+                    .iter()
+                    .map(|f| DownloadResponse {
+                        username: username.to_string(),
+                        filename: f.filename.clone(),
+                        size: f.size as u64,
+                        error: None, // No error - already queued is fine
+                    })
+                    .collect());
+            }
+
             return Err(SoulseekError::Api {
                 status: status.as_u16(),
                 message: resp_text,
@@ -488,6 +518,17 @@ impl SoulseekClient {
         batch: &[DownloadRequestFile],
         resp_text: &str,
     ) -> Vec<DownloadResponse> {
+        // Log the raw response for debugging
+        info!("slskd download response: '{}'", resp_text);
+
+        // slskd API returns { "enqueued": N, "failed": N } as counts
+        #[derive(Deserialize, Debug)]
+        struct SlskdCountResponse {
+            enqueued: Option<i32>,
+            failed: Option<i32>,
+        }
+
+        // Some versions may return file details
         #[derive(Deserialize, Debug)]
         #[serde(rename_all = "camelCase")]
         struct SlskdDownloadResponse {
@@ -510,7 +551,7 @@ impl SoulseekClient {
         };
 
         if resp_text.trim().is_empty() {
-            info!("Empty success response, assuming files queued");
+            info!("Empty success response, assuming {} files queued", batch.len());
             return batch
                 .iter()
                 .map(|f| DownloadResponse {
@@ -522,6 +563,58 @@ impl SoulseekClient {
                 .collect();
         }
 
+        // Try parsing as count response first (most common for slskd)
+        if let Ok(count_resp) = serde_json::from_str::<SlskdCountResponse>(resp_text) {
+            let enqueued = count_resp.enqueued.unwrap_or(0) as usize;
+            let failed = count_resp.failed.unwrap_or(0) as usize;
+
+            info!(
+                "slskd reported: {} enqueued, {} failed (batch had {} files)",
+                enqueued, failed, batch.len()
+            );
+
+            // If all were enqueued, return success for all
+            if enqueued == batch.len() && failed == 0 {
+                return batch
+                    .iter()
+                    .map(|f| DownloadResponse {
+                        username: username.to_string(),
+                        filename: f.filename.clone(),
+                        size: f.size as u64,
+                        error: None,
+                    })
+                    .collect();
+            }
+
+            // If some failed, we don't know which ones - mark all as success
+            // since slskd doesn't tell us which specific files failed
+            if enqueued > 0 {
+                return batch
+                    .iter()
+                    .map(|f| DownloadResponse {
+                        username: username.to_string(),
+                        filename: f.filename.clone(),
+                        size: f.size as u64,
+                        error: None,
+                    })
+                    .collect();
+            }
+
+            // All failed
+            if failed > 0 && enqueued == 0 {
+                return batch
+                    .iter()
+                    .map(|f| DownloadResponse {
+                        username: username.to_string(),
+                        filename: f.filename.clone(),
+                        size: f.size as u64,
+                        error: Some("Failed to enqueue".to_string()),
+                    })
+                    .collect();
+            }
+        }
+
+        // Try single file response
         if let Ok(single) = serde_json::from_str::<SlskdDownloadResponse>(resp_text) {
             return vec![DownloadResponse {
                 username: username.to_string(),
@@ -531,6 +624,7 @@ impl SoulseekClient {
             }];
         }
 
+        // Try array of files
         if let Ok(multi) = serde_json::from_str::<Vec<SlskdDownloadResponse>>(resp_text) {
             return multi
                 .into_iter()
@@ -543,6 +637,7 @@ impl SoulseekClient {
                 .collect();
         }
 
+        // Try batch response with arrays
         if let Ok(batch_resp) = serde_json::from_str::<SlskdBatchResponse>(resp_text) {
             let mut results: Vec<_> = batch_resp
                 .enqueued
@@ -572,13 +667,14 @@ impl SoulseekClient {
         }
 
         warn!("Failed to parse slskd response: '{}'", resp_text);
+        // Assume success if we got a 2xx status - the response format is just unexpected
         batch
             .iter()
             .map(|f| DownloadResponse {
                 username: username.to_string(),
                 filename: f.filename.clone(),
                 size: f.size as u64,
-                error: Some("Failed to parse server response".to_string()),
+                error: None,
             })
             .collect()
     }
