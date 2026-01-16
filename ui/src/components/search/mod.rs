@@ -55,7 +55,6 @@ pub fn Search() -> Element {
                 artist.set(None);
                 search_type.set(SearchType::Album);
                 viewing_album.set(None);
-                download_options.set(None);
                 loading.set(false);
             }
         }
@@ -123,12 +122,9 @@ pub fn Search() -> Element {
     };
 
     let download_tracks = move |(tracks, folder): (Vec<SlskdTrackResult>, String)| async move {
-        loading.set(true);
-        download_options.set(None);
         if let Ok(_res) = auth.call(api::download(tracks, folder)).await {
             info!("Downloads started");
         }
-        loading.set(false);
     };
 
     let perform_search = move || async move {
@@ -295,6 +291,10 @@ pub fn Search() -> Element {
             is_searching: loading(),
             on_download: move |data| {
                 spawn(download_tracks(data));
+            },
+            on_back: move |_| {
+                download_options.set(None);
+                loading.set(false);
             },
           }
         } else if loading() {

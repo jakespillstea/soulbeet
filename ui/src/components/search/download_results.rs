@@ -11,6 +11,8 @@ pub struct Props {
     pub is_searching: bool,
     #[props(into)]
     pub on_download: EventHandler<(Vec<TrackResult>, String)>,
+    #[props(into)]
+    pub on_back: EventHandler<()>,
 }
 
 #[derive(Props, Clone, PartialEq)]
@@ -167,7 +169,25 @@ pub fn DownloadResults(props: Props) -> Element {
 
     rsx! {
         div { class: "bg-beet-panel border border-white/10 text-white p-6 sm:p-8 rounded-lg shadow-2xl w-full max-w-2xl mx-auto my-10 font-display relative",
-            h3 { class: "text-2xl font-bold mb-6 text-center text-beet-accent", "Download Options" }
+            div { class: "relative mb-6",
+                button {
+                    class: "absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer",
+                    onclick: move |_| props.on_back.call(()),
+                    svg {
+                        class: "w-5 h-5 text-gray-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M15 19l-7-7 7-7",
+                        }
+                    }
+                }
+                h3 { class: "text-2xl font-bold text-center text-beet-accent", "Download Options" }
+            }
             div { class: "mb-4",
                 label {
                     r#for: "dl_folder",
