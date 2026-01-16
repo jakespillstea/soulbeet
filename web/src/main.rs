@@ -1,5 +1,6 @@
 use auth::{use_auth, AuthProvider};
-use dioxus::logger::tracing::warn;
+use dioxus::fullstack::{use_websocket, WebSocketOptions};
+use dioxus::logger::tracing::{info, warn};
 use dioxus::prelude::*;
 use shared::slskd::FileEntry;
 use std::collections::HashMap;
@@ -87,46 +88,23 @@ fn WebNavbar() -> Element {
 
     use_context_provider(|| SearchReset(search_reset));
 
+    let mut socket = use_websocket(|| api::download_updates_ws(WebSocketOptions::new()));
+
+    // Listen for download updates
     use_future(move || async move {
-        let mut backoff_ms: u32 = 1_000;
-        const MAX_BACKOFF_MS: u32 = 30_000;
-
+        info!("Starting WebSocket listener for download updates");
         loop {
-            let stream = auth.call(api::download_updates_stream()).await;
-
-            match stream {
-                Ok(mut s) => {
-                    // Reset backoff on successful connection
-                    backoff_ms = 1_000;
-
-                    while let Some(result) = s.next().await {
-                        match result {
-                            Ok(data) => {
-                                let mut map = downloads.write();
-                                for file in data {
-                                    // Use filename as key for consistent deduplication
-                                    // (initial queued entries and slskd responses share the same filename)
-                                    map.insert(file.filename.clone(), file);
-                                }
-                            }
-                            Err(e) => {
-                                warn!("Error receiving download update: {:?}, reconnecting", e);
-                                // Stream is corrupted, break and reconnect
-                                break;
-                            }
-                        }
+            match socket.recv().await {
+                Ok(data) => {
+                    let mut map = downloads.write();
+                    for file in data {
+                        // Use filename as key for consistent deduplication
+                        map.insert(file.filename.clone(), file);
                     }
-                    // Stream ended or errored, wait before reconnecting
-                    gloo_timers::future::TimeoutFuture::new(backoff_ms).await;
                 }
                 Err(e) => {
-                    warn!(
-                        "Failed to connect to download updates stream: {:?}, retrying in {}ms",
-                        e, backoff_ms
-                    );
-                    gloo_timers::future::TimeoutFuture::new(backoff_ms).await;
-                    // Exponential backoff with cap
-                    backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                    warn!("WebSocket error: {:?}", e);
+                    gloo_timers::future::TimeoutFuture::new(1_000).await;
                 }
             }
         }

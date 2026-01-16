@@ -1,4 +1,4 @@
-use dioxus::fullstack::{JsonEncoding, Streaming};
+use dioxus::fullstack::{WebSocketOptions, Websocket};
 use dioxus::logger::tracing::{info, warn};
 use dioxus::prelude::*;
 use shared::slskd::{DownloadResponse, DownloadState, FileEntry, TrackResult};
@@ -36,9 +36,12 @@ async fn slskd_download(tracks: Vec<TrackResult>) -> Result<Vec<DownloadResponse
     SLSKD_CLIENT.download(tracks).await.map_err(server_error)
 }
 
+/// WebSocket endpoint for real-time download updates.
+/// Uses WebSocket instead of HTTP streaming for more reliable delivery.
 #[get("/api/downloads/updates", auth: AuthSession)]
-pub async fn download_updates_stream(
-) -> Result<Streaming<Vec<FileEntry>, JsonEncoding>, ServerFnError> {
+pub async fn download_updates_ws(
+    options: WebSocketOptions,
+) -> Result<Websocket<(), Vec<FileEntry>>, ServerFnError> {
     let username = auth.0.username;
 
     let rx = {
@@ -50,33 +53,42 @@ pub async fn download_updates_stream(
         tx.subscribe()
     };
 
-    Ok(Streaming::spawn(move |tx_stream| async move {
+    Ok(options.on_upgrade(move |mut socket| async move {
         let mut rx = rx;
+        info!("WebSocket connected for user: {}", username);
+
         loop {
-            match rx.recv().await {
-                Ok(downloads) => {
-                    if tx_stream.unbounded_send(downloads).is_err() {
-                        // Client disconnected
-                        info!("Download updates stream closed (client disconnected)");
-                        break;
+            // handle both broadcast messages and potential socket closure
+            tokio::select! {
+                result = rx.recv() => {
+                    match result {
+                        Ok(downloads) => {
+                            if socket.send(downloads).await.is_err() {
+                                info!("WebSocket closed (client disconnected)");
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            warn!(
+                                "Download updates lagged, skipped {} messages",
+                                skipped
+                            );
+                            // lagged is recoverable
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            info!("Broadcast channel closed");
+                            break;
+                        }
                     }
                 }
-                Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                    // Client couldn't keep up, some messages were dropped
-                    // This is recoverable - just continue receiving
-                    warn!(
-                        "Download updates stream lagged, skipped {} messages",
-                        skipped
-                    );
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    // All senders have been dropped - channel is closed
-                    // This shouldn't normally happen since we keep senders in USER_CHANNELS
-                    info!("Download updates broadcast channel closed");
-                    break;
+                _ = socket.recv() => {
+                    // Client sent something or disconnected
+                    // We don't expect client messages, but this helps detect closure
                 }
             }
         }
+
+        info!("WebSocket disconnected for user: {}", username);
     }))
 }
 
