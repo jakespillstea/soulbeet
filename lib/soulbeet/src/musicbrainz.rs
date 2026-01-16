@@ -8,8 +8,9 @@ use musicbrainz_rs::{
     Fetch, MusicBrainzClient, Search,
 };
 use shared::musicbrainz::{Album, AlbumWithTracks, SearchResult, Track};
-use std::{collections::HashSet, sync::OnceLock};
-use tracing::info;
+use std::{collections::HashSet, future::Future, sync::OnceLock, time::Duration};
+use tokio::time::sleep;
+use tracing::{info, warn};
 
 // This ensures the client is initialized only once with a proper user agent.
 fn musicbrainz_client() -> &'static MusicBrainzClient {
@@ -47,6 +48,43 @@ fn format_duration(duration_ms: &Option<u32>) -> Option<String> {
     })
 }
 
+const MAX_RETRIES: u32 = 3;
+const BASE_DELAY_MS: u64 = 500;
+
+/// Retries an async operation with exponential backoff.
+/// Starts with 500ms delay, doubling each retry (500ms, 1000ms, 2000ms).
+async fn with_retry<T, E, F, Fut>(operation_name: &str, mut operation: F) -> Result<T, E>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    E: std::fmt::Debug,
+{
+    let mut last_error = None;
+
+    for attempt in 0..MAX_RETRIES {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                last_error = Some(e);
+                if attempt < MAX_RETRIES - 1 {
+                    let delay = Duration::from_millis(BASE_DELAY_MS * 2u64.pow(attempt));
+                    warn!(
+                        "{} failed (attempt {}/{}), retrying in {:?}: {:?}",
+                        operation_name,
+                        attempt + 1,
+                        MAX_RETRIES,
+                        delay,
+                        last_error
+                    );
+                    sleep(delay).await;
+                }
+            }
+        }
+    }
+
+    Err(last_error.unwrap())
+}
+
 /// An enumeration to specify the type of search.
 #[derive(Debug)]
 pub enum SearchType {
@@ -71,17 +109,21 @@ pub async fn search(
 
     match search_type {
         SearchType::Track => {
-            let mut recording_query = RecordingSearchQuery::query_builder();
-            if let Some(ref artist) = artist {
-                recording_query.artist_name(artist).and();
-            }
-            let search_query = recording_query.recording(query).build();
-
-            let search_results = Recording::search(search_query)
-                .limit(limit)
-                .with_releases()
-                .execute_with_client(client)
-                .await?;
+            let search_results = with_retry("MusicBrainz track search", || {
+                let mut recording_query = RecordingSearchQuery::query_builder();
+                if let Some(ref artist) = artist {
+                    recording_query.artist_name(artist).and();
+                }
+                let search_query = recording_query.recording(query).build();
+                async move {
+                    Recording::search(search_query)
+                        .limit(limit)
+                        .with_releases()
+                        .execute_with_client(client)
+                        .await
+                }
+            })
+            .await?;
 
             let mut unique_tracks = HashSet::new();
 
@@ -118,17 +160,21 @@ pub async fn search(
             }
         }
         SearchType::Album => {
-            let mut album_query = ReleaseGroupSearchQuery::query_builder();
-            if let Some(ref artist) = artist {
-                album_query.artist(artist).and();
-            }
-            let search_query = album_query.release_group(query).build();
-
-            let search_results = ReleaseGroup::search(search_query)
-                .limit(limit)
-                .with_releases()
-                .execute_with_client(client)
-                .await?;
+            let search_results = with_retry("MusicBrainz album search", || {
+                let mut album_query = ReleaseGroupSearchQuery::query_builder();
+                if let Some(ref artist) = artist {
+                    album_query.artist(artist).and();
+                }
+                let search_query = album_query.release_group(query).build();
+                async move {
+                    ReleaseGroup::search(search_query)
+                        .limit(limit)
+                        .with_releases()
+                        .execute_with_client(client)
+                        .await
+                }
+            })
+            .await?;
 
             for release_group in search_results.entities {
                 if release_group.primary_type != Some(ReleaseGroupPrimaryType::Album)
@@ -165,12 +211,15 @@ pub async fn find_album(release_id: &str) -> Result<AlbumWithTracks, musicbrainz
     let client = musicbrainz_client();
 
     // Fetch the release with recordings (tracks) and artist credits for the tracks.
-    let release = Release::fetch()
-        .id(release_id)
-        .with_recordings()
-        .with_artist_credits()
-        .execute_with_client(client)
-        .await?;
+    let release = with_retry("MusicBrainz album fetch", || async {
+        Release::fetch()
+            .id(release_id)
+            .with_recordings()
+            .with_artist_credits()
+            .execute_with_client(client)
+            .await
+    })
+    .await?;
 
     let mut tracks = Vec::new();
 
