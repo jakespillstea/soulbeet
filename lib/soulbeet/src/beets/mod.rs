@@ -102,7 +102,8 @@ pub async fn import(
         .arg("-d") // destination directory
         .arg(target)
         .arg("import")
-        .arg("-q"); // quiet mode: do not ask for confirmation
+        .arg("-q") // quiet mode: do not ask for confirmation
+        .arg("--duplicate-action=skip"); // skip files that already exist in library
 
     if !as_album {
         cmd.arg("-s"); // singleton mode
