@@ -1,5 +1,6 @@
 use auth::{use_auth, AuthProvider};
-use dioxus::logger::tracing::warn;
+use dioxus::fullstack::{use_websocket, WebSocketOptions};
+use dioxus::logger::tracing::{info, warn};
 use dioxus::prelude::*;
 use shared::slskd::FileEntry;
 use std::collections::HashMap;
@@ -87,21 +88,22 @@ fn WebNavbar() -> Element {
 
     use_context_provider(|| SearchReset(search_reset));
 
-    use_future(move || async move {
-        loop {
-            let stream = auth.call(api::download_updates_stream()).await;
+    let mut socket = use_websocket(|| api::download_updates_ws(WebSocketOptions::new()));
 
-            match stream {
-                Ok(mut s) => {
-                    while let Some(Ok(data)) = s.next().await {
-                        let mut map = downloads.write();
-                        for file in data {
-                            map.insert(file.id.clone(), file);
-                        }
+    // Listen for download updates
+    use_future(move || async move {
+        info!("Starting WebSocket listener for download updates");
+        loop {
+            match socket.recv().await {
+                Ok(data) => {
+                    let mut map = downloads.write();
+                    for file in data {
+                        // Use filename as key for consistent deduplication
+                        map.insert(file.filename.clone(), file);
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to connect to download updates stream: {:?}", e);
+                    warn!("WebSocket error: {:?}", e);
                     gloo_timers::future::TimeoutFuture::new(1_000).await;
                 }
             }

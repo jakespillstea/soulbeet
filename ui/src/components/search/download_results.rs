@@ -11,6 +11,8 @@ pub struct Props {
     pub is_searching: bool,
     #[props(into)]
     pub on_download: EventHandler<(Vec<TrackResult>, String)>,
+    #[props(into)]
+    pub on_back: EventHandler<()>,
 }
 
 #[derive(Props, Clone, PartialEq)]
@@ -91,6 +93,7 @@ pub fn DownloadResults(props: Props) -> Element {
     let results = props.results.clone();
     let mut folders = use_signal(std::vec::Vec::new);
     let mut selected_folder = use_signal(|| "".to_string());
+    let mut is_downloading = use_signal(|| false);
     let auth = use_auth();
 
     use_future(move || async move {
@@ -136,6 +139,12 @@ pub fn DownloadResults(props: Props) -> Element {
     };
 
     let handle_download = move |_| {
+        // Prevent double-clicks by checking if already downloading
+        if *is_downloading.read() {
+            info!("Download already in progress, ignoring click");
+            return;
+        }
+
         let selected_ids = selected_tracks.read();
 
         let tracks_to_download: Vec<TrackResult> = props
@@ -145,6 +154,14 @@ pub fn DownloadResults(props: Props) -> Element {
             .filter(|track| selected_ids.contains(&get_track_id(track)))
             .cloned()
             .collect();
+
+        if tracks_to_download.is_empty() {
+            return;
+        }
+
+        // Set downloading state immediately to prevent double-clicks
+        is_downloading.set(true);
+
         props
             .on_download
             .call((tracks_to_download, selected_folder()));
@@ -152,7 +169,25 @@ pub fn DownloadResults(props: Props) -> Element {
 
     rsx! {
         div { class: "bg-beet-panel border border-white/10 text-white p-6 sm:p-8 rounded-lg shadow-2xl w-full max-w-2xl mx-auto my-10 font-display relative",
-            h3 { class: "text-2xl font-bold mb-6 text-center text-beet-accent", "Download Options" }
+            div { class: "relative mb-6",
+                button {
+                    class: "absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer",
+                    onclick: move |_| props.on_back.call(()),
+                    svg {
+                        class: "w-5 h-5 text-gray-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M15 19l-7-7 7-7",
+                        }
+                    }
+                }
+                h3 { class: "text-2xl font-bold text-center text-beet-accent", "Download Options" }
+            }
             div { class: "mb-4",
                 label {
                     r#for: "dl_folder",
@@ -194,18 +229,23 @@ pub fn DownloadResults(props: Props) -> Element {
             div { class: "fixed bottom-8 right-8",
                 button {
                     class: "bg-beet-accent hover:bg-fuchsia-400 text-white font-bold p-4 rounded-full shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center cursor-pointer",
-                    disabled: selected_tracks.read().is_empty() || selected_folder.read().is_empty(),
+                    disabled: selected_tracks.read().is_empty() || selected_folder.read().is_empty() || *is_downloading.read(),
                     onclick: handle_download,
-                    svg {
-                        class: "w-6 h-6",
-                        fill: "none",
-                        stroke: "currentColor",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            stroke_width: "2",
-                            d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                    if *is_downloading.read() {
+                        // Show spinner when downloading
+                        div { class: "animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-white" }
+                    } else {
+                        svg {
+                            class: "w-6 h-6",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                            }
                         }
                     }
                 }
