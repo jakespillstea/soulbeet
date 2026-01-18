@@ -153,16 +153,7 @@ where
                             for file in dir_files {
                                 match serde_json::from_value::<FileEntry>(file.clone()) {
                                     Ok(file_entry) => files.push(file_entry),
-                                    Err(e) => {
-                                        // Log but don't fail - skip malformed entries
-                                        #[cfg(feature = "tracing")]
-                                        tracing::warn!(
-                                            "Failed to parse file entry: {} - {:?}",
-                                            e,
-                                            file
-                                        );
-                                        // Continue processing other files
-                                    }
+                                    Err(_) => continue,
                                 }
                             }
                         }

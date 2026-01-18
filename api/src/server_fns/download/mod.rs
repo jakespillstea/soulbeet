@@ -7,7 +7,11 @@ use dioxus::logger::tracing::{debug, info, warn};
 #[cfg(feature = "server")]
 use shared::slskd::DownloadState;
 #[cfg(feature = "server")]
+use std::collections::HashMap;
+#[cfg(feature = "server")]
 use tokio::sync::broadcast;
+#[cfg(feature = "server")]
+use tokio::time::Instant;
 
 use crate::server_fns::server_error;
 
@@ -25,6 +29,30 @@ use chrono::Utc;
 
 #[cfg(feature = "server")]
 use uuid::Uuid;
+
+#[cfg(feature = "server")]
+struct TrackState {
+    first_seen: Option<Instant>,
+    processed: bool,
+}
+
+#[cfg(feature = "server")]
+fn is_terminal_state(state: &[DownloadState]) -> bool {
+    state.iter().any(|s| {
+        matches!(
+            s,
+            DownloadState::Downloaded
+                | DownloadState::Aborted
+                | DownloadState::Cancelled
+                | DownloadState::Errored
+        )
+    })
+}
+
+#[cfg(feature = "server")]
+fn is_downloaded(state: &[DownloadState]) -> bool {
+    state.iter().any(|s| matches!(s, DownloadState::Downloaded))
+}
 
 // Import local modules
 #[cfg(feature = "server")]
@@ -182,8 +210,7 @@ pub async fn download(
     let (failed, successful): (Vec<_>, Vec<_>) =
         res.iter().cloned().partition(|d| d.error.is_some());
 
-    // Get or create user channel with cancellation support
-    let (tx, cancellation_token) = get_or_create_user_channel(&username).await;
+    let (tx, _) = get_or_create_user_channel(&username).await;
 
     if !failed.is_empty() {
         let failed_entries: Vec<FileEntry> = failed
@@ -257,11 +284,19 @@ pub async fn download(
 
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
-        let mut attempts = 0;
         let mut consecutive_empty = 0;
-        const MAX_ATTEMPTS: usize = 600; // ~20 minutes timeout
         // Increased grace period: slskd can take time to queue downloads, especially for busy peers
         const MAX_CONSECUTIVE_EMPTY: usize = 15; // 30 seconds grace period (15 * 2s interval)
+        const PER_TRACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60); //1 hour per track
+
+        // Track state for each file
+        let mut track_states: HashMap<String, TrackState> = download_filenames
+            .iter()
+            .map(|f| (f.clone(), TrackState { first_seen: None, processed: false }))
+            .collect();
+
+        let album_mode = std::env::var("BEETS_ALBUM_MODE").is_ok();
+        let mut poll_count = 0;
 
         // Poll immediately on first iteration, then wait for interval
         interval.tick().await;
@@ -273,46 +308,12 @@ pub async fn download(
                 break;
             }
 
-            attempts += 1;
-
-            if attempts > MAX_ATTEMPTS {
-                warn!(
-                    "Download monitoring timed out after {} attempts for batch {:?}",
-                    MAX_ATTEMPTS, download_filenames
-                );
-                // Send timeout notification
-                let timeout_entries: Vec<FileEntry> = download_filenames
-                    .iter()
-                    .map(|filename| FileEntry {
-                        id: Uuid::new_v4().to_string(),
-                        username: String::new(),
-                        direction: "Download".to_string(),
-                        filename: filename.clone(),
-                        size: 0,
-                        start_offset: 0,
-                        state: vec![DownloadState::Errored],
-                        state_description: "Download monitoring timed out".to_string(),
-                        requested_at: Utc::now().to_rfc3339(),
-                        enqueued_at: None,
-                        started_at: None,
-                        ended_at: Some(Utc::now().to_rfc3339()),
-                        bytes_transferred: 0,
-                        average_speed: 0.0,
-                        bytes_remaining: 0,
-                        elapsed_time: None,
-                        percent_complete: 0.0,
-                        remaining_time: None,
-                        exception: Some("Monitoring timed out".to_string()),
-                    })
-                    .collect();
-                let _ = tx.send(timeout_entries);
-                break;
-            }
+            poll_count += 1;
 
             match SLSKD_CLIENT.get_all_downloads().await {
                 Ok(downloads) => {
                     // Debug: log what slskd returns vs what we're looking for (only first few attempts)
-                    if attempts <= 3 {
+                    if poll_count <= 3 {
                         debug!("Looking for filenames: {:?}", download_filenames);
                         let slskd_filenames: Vec<_> = downloads.iter().map(|f| &f.filename).collect();
                         debug!("slskd returned {} downloads: {:?}", downloads.len(), slskd_filenames);
@@ -322,12 +323,12 @@ pub async fn download(
                     let matched_downloads = find_matching_downloads(&downloads, &download_filenames);
                     let batch_status: Vec<FileEntry> = matched_downloads.into_iter().cloned().collect();
 
-                    if attempts <= 3 || batch_status.len() != download_filenames.len() {
+                    if poll_count <= 3 || batch_status.len() != download_filenames.len() {
                         info!(
-                            "Matched {} of {} downloads from slskd (attempt {})",
+                            "Matched {} of {} downloads from slskd (poll {})",
                             batch_status.len(),
                             download_filenames.len(),
-                            attempts
+                            poll_count
                         );
                         // Log any unmatched files for debugging
                         if batch_status.len() < download_filenames.len() {
@@ -377,38 +378,109 @@ pub async fn download(
                         continue;
                     }
 
-                    // Check if all downloads are finished
-                    let all_finished = batch_status.iter().all(|d| {
-                        d.state.iter().any(|s| {
-                            matches!(
-                                s,
-                                DownloadState::Downloaded
-                                    | DownloadState::Aborted
-                                    | DownloadState::Cancelled
-                                    | DownloadState::Errored
-                            )
-                        })
+                    // Process each track individually
+                    for download in &batch_status {
+                        // Find matching track state using fuzzy matching
+                        let matching_key = track_states.keys()
+                            .find(|k| filenames_match(k, &download.filename))
+                            .cloned();
+
+                        if let Some(key) = matching_key {
+                            let state = track_states.get_mut(&key).unwrap();
+
+                            // Record first seen time
+                            if state.first_seen.is_none() {
+                                state.first_seen = Some(Instant::now());
+                            }
+
+                            // Skip already processed tracks
+                            if state.processed {
+                                continue;
+                            }
+
+                            // Check per-track timeout for non-terminal states
+                            if let Some(first_seen) = state.first_seen {
+                                if first_seen.elapsed() > PER_TRACK_TIMEOUT && !is_terminal_state(&download.state) {
+                                    warn!("Track timed out after {} minutes: {}", first_seen.elapsed().as_secs() / 60, download.filename);
+                                    // Send timeout for the track
+                                    let timeout_entry = FileEntry {
+                                        id: download.id.clone(),
+                                        username: download.username.clone(),
+                                        direction: "Download".to_string(),
+                                        filename: download.filename.clone(),
+                                        size: download.size,
+                                        start_offset: 0,
+                                        state: vec![DownloadState::Errored],
+                                        state_description: "Download timed out after 1 hour".to_string(),
+                                        requested_at: download.requested_at.clone(),
+                                        enqueued_at: download.enqueued_at.clone(),
+                                        started_at: download.started_at.clone(),
+                                        ended_at: Some(Utc::now().to_rfc3339()),
+                                        bytes_transferred: download.bytes_transferred,
+                                        average_speed: download.average_speed,
+                                        bytes_remaining: download.bytes_remaining,
+                                        elapsed_time: download.elapsed_time.clone(),
+                                        percent_complete: download.percent_complete,
+                                        remaining_time: None,
+                                        exception: Some("Per-track timeout".to_string()),
+                                    };
+                                    let _ = tx.send(vec![timeout_entry]);
+                                    state.processed = true;
+                                    continue;
+                                }
+                            }
+
+                            // Singleton mode: process completed tracks immediately
+                            if !album_mode && is_downloaded(&download.state) {
+                                info!("Track completed, processing immediately (singleton mode): {}", download.filename);
+                                state.processed = true;
+                                let dl = download.clone();
+                                let tp = target_path.clone();
+                                let tx_clone = tx.clone();
+                                tokio::spawn(async move {
+                                    process_downloads(vec![dl], tp, tx_clone).await;
+                                });
+                            }
+
+                            // Mark terminal states (errored/cancelled/aborted) as processed
+                            if is_terminal_state(&download.state) && !is_downloaded(&download.state) {
+                                state.processed = true;
+                            }
+                        }
+                    }
+
+                    // Check if all tracks are done
+                    let all_processed = track_states.values().all(|s| s.processed);
+                    let all_terminal = download_filenames.iter().all(|fname| {
+                        batch_status.iter()
+                            .find(|d| filenames_match(&d.filename, fname))
+                            .map(|d| is_terminal_state(&d.state))
+                            .unwrap_or(false)
                     });
 
-                    if all_finished {
-                        info!("All downloads finished, starting import process");
-                        let successful_downloads: Vec<_> = batch_status
-                            .iter()
-                            .filter(|d| {
-                                d.state
-                                    .iter()
-                                    .any(|s| matches!(s, DownloadState::Downloaded))
-                            })
-                            .cloned()
-                            .collect();
+                    if all_processed || all_terminal {
+                        if album_mode {
+                            // Album mode: process all successful downloads together
+                            let successful: Vec<_> = batch_status.iter()
+                                .filter(|d| {
+                                    is_downloaded(&d.state) &&
+                                    track_states.keys()
+                                        .find(|k| filenames_match(k, &d.filename))
+                                        .and_then(|k| track_states.get(k))
+                                        .map(|s| !s.processed)
+                                        .unwrap_or(false)
+                                })
+                                .cloned()
+                                .collect();
 
-                        if successful_downloads.is_empty() {
-                            warn!("All downloads failed or were cancelled, skipping import");
-                        } else {
-                            info!("Processing {} successful downloads", successful_downloads.len());
-                            process_downloads(successful_downloads, target_path.clone(), tx.clone())
-                                .await;
+                            if !successful.is_empty() {
+                                info!("Album mode: Processing {} successful downloads together", successful.len());
+                                process_downloads(successful, target_path.clone(), tx.clone()).await;
+                            } else {
+                                info!("Album mode: No successful downloads to process");
+                            }
                         }
+                        info!("All downloads finished");
                         break;
                     }
                 }
