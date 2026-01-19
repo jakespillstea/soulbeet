@@ -1,4 +1,3 @@
-use chrono::Duration;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use shared::{
@@ -8,16 +7,14 @@ use shared::{
 };
 
 #[cfg(feature = "server")]
+use chrono::Duration;
+#[cfg(feature = "server")]
 use soulbeet::musicbrainz;
 
-use super::server_error;
+#[cfg(feature = "server")]
+use crate::{globals::SLSKD_CLIENT, server_fns::server_error, AuthSession};
 
 #[cfg(feature = "server")]
-use crate::AuthSession;
-
-#[cfg(feature = "server")]
-use crate::globals::SLSKD_CLIENT;
-
 static SLSKD_MAX_SEARCH_DURATION: i64 = 120; // seconds
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

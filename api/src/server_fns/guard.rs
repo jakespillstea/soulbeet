@@ -1,7 +1,9 @@
-use crate::auth::{self, Claims};
+use crate::auth::Claims;
 
 #[cfg(feature = "server")]
 use axum::{extract::FromRequestParts, http::StatusCode};
+#[cfg(feature = "server")]
+use crate::auth;
 
 pub struct AuthSession(pub Claims);
 

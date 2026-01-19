@@ -2,8 +2,7 @@ use dioxus::prelude::*;
 use shared::system::SystemHealth;
 
 #[cfg(feature = "server")]
-use crate::globals::SLSKD_CLIENT;
-use crate::AuthSession;
+use crate::{globals::SLSKD_CLIENT, AuthSession};
 
 #[get("/api/system/health", _: AuthSession)]
 pub async fn get_system_health() -> Result<SystemHealth, ServerFnError> {

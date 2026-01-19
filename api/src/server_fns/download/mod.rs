@@ -7,10 +7,8 @@ use dioxus::logger::tracing::{info, warn};
 #[cfg(feature = "server")]
 use tokio::sync::broadcast;
 
-use crate::server_fns::server_error;
-
 #[cfg(feature = "server")]
-use crate::AuthSession;
+use crate::{server_fns::server_error, AuthSession};
 
 #[cfg(feature = "server")]
 use crate::globals::{
