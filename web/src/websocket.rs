@@ -42,6 +42,7 @@ where
     C: Fn() -> Fut + 'static,
     Fut: Future<Output = Result<dioxus::fullstack::Websocket<(), T>, ServerFnError>> + 'static,
 {
+    #[cfg(feature = "web")]
     use_resilient_websocket_with_config(connect, on_message, ReconnectConfig::default())
 }
 

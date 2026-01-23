@@ -84,9 +84,11 @@ pub async fn download_updates_ws(
                         }
                     }
                 }
-                _ = socket.recv() => {
-                    // Client sent something or disconnected
-                    // We don't expect client messages, but this helps detect closure
+                result = socket.recv() => {
+                    if result.is_err() {
+                        info!("WebSocket client disconnected");
+                        break;
+                    }
                 }
             }
         }
