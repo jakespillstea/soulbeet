@@ -38,10 +38,10 @@ fn main() {
     {
         use tower_cookies::CookieManagerLayer;
 
-        // Start background cleanup task for user channels
-        api::globals::start_channel_cleanup_task();
-
         dioxus::serve(|| async move {
+            // Start background cleanup task for user channels
+            api::globals::start_channel_cleanup_task();
+
             Ok(dioxus::server::router(App).layer(CookieManagerLayer::new()))
         });
     }
