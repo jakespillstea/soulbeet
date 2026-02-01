@@ -8,7 +8,7 @@ use dioxus::fullstack::WebSocketOptions;
 #[cfg(feature = "web")]
 use websocket::use_resilient_websocket;
 
-use ui::{Downloads, Layout, Navbar, SearchReset};
+use ui::{Downloads, Layout, Navbar, SearchReset, SettingsProvider};
 use views::{LoginPage, SearchPage, SettingsPage};
 
 mod auth;
@@ -58,7 +58,11 @@ fn App() -> Element {
         document::Meta { name: "viewport", content: "width=device-width, initial-scale=1" }
         document::Title { "SoulBeet" }
 
-        AuthProvider { Router::<Route> {} }
+        AuthProvider {
+            SettingsProvider {
+                Router::<Route> {}
+            }
+        }
     }
 }
 

@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::process::process_downloads;
 use crate::config::CONFIG;
-use crate::globals::SERVICES;
+use crate::services::download_backend;
 
 /// Poll interval for checking download status (2 seconds).
 const POLL_INTERVAL_SECS: u64 = 2;
@@ -104,9 +104,12 @@ impl DownloadMonitor {
 
             poll_count += 1;
 
-            let Some(backend) = SERVICES.download(None) else {
-                warn!("No download backend available for monitoring");
-                break;
+            let backend = match download_backend(None).await {
+                Ok(b) => b,
+                Err(e) => {
+                    warn!("No download backend available for monitoring: {}", e);
+                    break;
+                }
             };
             match backend.get_downloads().await {
                 Ok(downloads) => {
@@ -182,7 +185,7 @@ impl DownloadMonitor {
                 );
                 return true;
             }
-            if *consecutive_empty % 5 == 0 {
+            if (*consecutive_empty).is_multiple_of(5) {
                 info!(
                     "Waiting for downloads to appear in slskd, attempt {}/{} ({}/{}s)",
                     *consecutive_empty,

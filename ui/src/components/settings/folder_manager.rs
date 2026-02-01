@@ -76,7 +76,7 @@ pub fn FolderManager() -> Element {
     };
 
     rsx! {
-        div { class: "bg-beet-panel border border-white/10 p-6 rounded-lg shadow-2xl mb-8 relative z-10",
+        div { class: "bg-beet-panel border border-white/10 p-6 rounded-lg shadow-2xl relative z-10",
             h2 { class: "text-xl font-bold mb-4 text-beet-accent font-display", "Manage Music Folders" }
 
             // Local Messages

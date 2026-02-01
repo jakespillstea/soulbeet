@@ -14,7 +14,8 @@ Screenshots: [here](./screenshots)
 
 ## Features
 
--   **Unified Search**: Search for albums and tracks using MusicBrainz metadata and find sources on Soulseek.
+-   **Unified Search**: Search for albums and tracks using MusicBrainz or Last.fm metadata, then find sources on Soulseek.
+-   **Multiple Metadata Providers**: Choose between MusicBrainz (better for albums) or Last.fm (better for single tracks) in your user settings.
 -   **One-Click Download & Import**: Select an album (or just some tracks), choose your target folder, and Soulbeet handles the rest.
 -   **Automated Importing**: Automatically monitors downloads and uses the `beets` CLI to tag, organize, and move files to your specified music folder.
 -   **User Management**: Multi-user support with private folders. Each user can manage their own music library paths. Or have a common folder.
@@ -49,11 +50,8 @@ services:
       - 9765:9765
     environment:
       - DATABASE_URL=sqlite:/data/soulbeet.db
-      - SLSKD_URL=http://slskd:5030
-      # This part is important, get your API from slskd config file or add one: https://github.com/slskd/slskd/blob/master/docs/config.md#yaml-24
-      - SLSKD_API_KEY=your_slskd_api_key_here
       # The path where slskd saves files (INSIDE the soulbeet container)
-      - SLSKD_DOWNLOAD_PATH=/downloads
+      - DOWNLOAD_PATH=/downloads
       # Optional: Beets configuration
       - BEETS_CONFIG=/config/config.yaml
       - SECRET_KEY=secret
@@ -97,7 +95,9 @@ docker-compose up -d --build
     -   Password: `admin`
 3.  Go to **Settings**.
 4.  **Change your password** (Create a new user if you prefer and delete the admin later, or just change the admin logic if you forked the code).
-5.  **Add Music Folders**: Add the paths where you want your music to be stored (e.g., `/music/Person1`, `/music/Person2`,  `/music/Shared`). These must be paths accessible inside the Docker container.
+5.  **Configure slskd connection** (Settings > Config): Add your slskd URL (e.g., `http://slskd:5030`) and API key. Get your API key from slskd config file or [add one](https://github.com/slskd/slskd/blob/master/docs/config.md#yaml-24).
+6.  **Add Music Folders** (Settings > Library): Add the paths where you want your music to be stored (e.g., `/music/Person1`, `/music/Person2`,  `/music/Shared`). These must be paths accessible inside the Docker container.
+7.  **Configure Search Preferences** (Settings > Search, optional): Choose your default metadata provider. If you want to use Last.fm, first add your API key in Settings > Config.
 
 ## Configuration
 
@@ -106,12 +106,12 @@ docker-compose up -d --build
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABASE_URL` | Connection string for SQLite | `sqlite:soulbeet.db` |
-| `SLSKD_URL` | URL of your Slskd instance | |
-| `SLSKD_API_KEY` | API Key for Slskd | |
-| `SLSKD_DOWNLOAD_PATH` | Path where Slskd downloads files | |
+| `DOWNLOAD_PATH` | Path where downloads are saved | `/downloads` |
 | `BEETS_CONFIG` | Path to custom beets config file | `beets_config.yaml` |
 | `BEETS_ALBUM_MODE` | Enable album import mode (see below) | `false` |
 | `SECRET_KEY` | Used to encrypt tokens | |
+
+**Note**: slskd URL and API key are configured through the web UI (Settings > Config) and stored in the database.
 
 ### Beets Configuration
 

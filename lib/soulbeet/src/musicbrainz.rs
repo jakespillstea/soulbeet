@@ -211,15 +211,24 @@ pub async fn search(
                     Recording::search(search_query)
                         .limit(limit)
                         .with_releases()
+                        .with_ratings()
                         .execute_with_client(client)
                         .await
                 }
             })
             .await?;
 
+            // Sort by rating (descending) - higher rated recordings first
+            let mut recordings: Vec<_> = search_results.entities;
+            recordings.sort_by(|a, b| {
+                let a_rating = a.rating.as_ref().and_then(|r| r.value).unwrap_or(0.0);
+                let b_rating = b.rating.as_ref().and_then(|r| r.value).unwrap_or(0.0);
+                b_rating.partial_cmp(&a_rating).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
             let mut unique_tracks = HashSet::new();
 
-            for recording in search_results.entities {
+            for recording in recordings {
                 let artist_name = format_artist_credit(&recording.artist_credit);
                 let album_title = recording
                     .releases
@@ -262,13 +271,22 @@ pub async fn search(
                     ReleaseGroup::search(search_query)
                         .limit(limit)
                         .with_releases()
+                        .with_ratings()
                         .execute_with_client(client)
                         .await
                 }
             })
             .await?;
 
-            for release_group in search_results.entities {
+            // Sort by rating (descending) - higher rated albums first
+            let mut release_groups: Vec<_> = search_results.entities;
+            release_groups.sort_by(|a, b| {
+                let a_rating = a.rating.as_ref().and_then(|r| r.value).unwrap_or(0.0);
+                let b_rating = b.rating.as_ref().and_then(|r| r.value).unwrap_or(0.0);
+                b_rating.partial_cmp(&a_rating).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            for release_group in release_groups {
                 if release_group.primary_type != Some(ReleaseGroupPrimaryType::Album)
                     && release_group.primary_type != Some(ReleaseGroupPrimaryType::Ep)
                 {

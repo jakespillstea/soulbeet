@@ -27,7 +27,7 @@ pub async fn process_downloads(
             target_path
         );
 
-        let download_path_buf = CONFIG.slskd_download_path().clone();
+        let download_path_buf = CONFIG.download_path().clone();
         let album_mode = CONFIG.is_album_mode();
 
         if album_mode {

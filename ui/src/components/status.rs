@@ -9,13 +9,13 @@ pub fn SystemStatus(health: SystemHealth) -> Element {
           span {
             class: format!(
                 "w-2 h-2 rounded-full {}",
-                if health.slskd_online { "bg-beet-leaf animate-pulse" } else { "bg-red-500" },
+                if health.downloader_online { "bg-beet-leaf animate-pulse" } else { "bg-red-500" },
             ),
           }
-          if health.slskd_online {
-            "SLSKD ONLINE"
+          if health.downloader_online {
+            "DOWNLOADER ONLINE"
           } else {
-            "SLSKD OFFLINE"
+            "DOWNLOADER OFFLINE"
           }
         }
         span { class: "flex items-center gap-2",

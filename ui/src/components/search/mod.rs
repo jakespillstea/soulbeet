@@ -15,6 +15,7 @@ use shared::system::SystemHealth;
 use track::TrackResult;
 
 use crate::search::album::AlbumResult;
+use crate::settings_context::use_settings;
 use crate::{use_auth, Album, AlbumHeader, Button, Modal, SystemStatus};
 
 mod download_results;
@@ -26,10 +27,11 @@ use search_type_toggle::{SearchType, SearchTypeToggle};
 #[component]
 pub fn Search() -> Element {
     let auth = use_auth();
+    let mut settings = use_settings();
     let mut search_results = use_signal::<Option<Vec<SearchResult>>>(|| None);
     let mut search = use_signal(String::new);
     let mut artist = use_signal::<Option<String>>(|| None);
-    let mut search_type = use_signal(|| SearchType::Album);
+    let mut search_type = use_signal(|| settings.last_search_type());
     let mut loading = use_signal(|| false);
     let mut viewing_album = use_signal::<Option<AlbumWithTracks>>(|| None);
     let mut download_options = use_signal::<Option<Vec<DownloadableGroup>>>(|| None);
@@ -37,6 +39,27 @@ pub fn Search() -> Element {
     let search_reset = try_use_context::<SearchReset>();
 
     let mut system_status = use_signal(SystemHealth::default);
+
+    // Track if we've synced search_type from settings (to avoid saving on initial load)
+    let mut synced = use_signal(|| false);
+
+    // Sync search type from settings once loaded
+    use_effect(move || {
+        if settings.is_loaded() && !synced() {
+            search_type.set(settings.last_search_type());
+            synced.set(true);
+        }
+    });
+
+    // Persist search type changes to settings
+    use_effect(move || {
+        let current_type = search_type();
+        if synced() {
+            spawn(async move {
+                let _ = settings.set_last_search_type(current_type).await;
+            });
+        }
+    });
 
     use_future(move || async move {
         loop {
@@ -53,7 +76,6 @@ pub fn Search() -> Element {
                 search_results.set(None);
                 search.set(String::new());
                 artist.set(None);
-                search_type.set(SearchType::Album);
                 viewing_album.set(None);
                 loading.set(false);
             }
@@ -143,10 +165,12 @@ pub fn Search() -> Element {
         loading.set(true);
         download_options.set(None);
 
+        let provider = Some(settings.default_provider());
+
         let query_data = api::SearchQuery {
             artist: artist(),
             query: search(),
-            provider: None,
+            provider,
         };
 
         let result = match search_type() {
@@ -166,7 +190,7 @@ pub fn Search() -> Element {
         match auth
             .call(api::find_album(api::AlbumQuery {
                 id: album_id.clone(),
-                provider: None,
+                provider: Some(settings.default_provider()),
             }))
             .await
         {
@@ -324,7 +348,7 @@ pub fn Search() -> Element {
         } else {
           match &*search_results.read() {
               Some(ref items) if !items.is_empty() => rsx! {
-                div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8",
+                div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8 rounded-lg",
                   h5 { class: "text-xl font-display font-bold mb-4 border-b border-white/10 pb-2 text-white",
                     "Search Results"
                   }

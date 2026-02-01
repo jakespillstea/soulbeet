@@ -114,12 +114,6 @@ impl ServicesBuilder {
     }
 
     pub fn build(self) -> Result<Services, &'static str> {
-        if self.metadata.is_empty() {
-            return Err("at least one metadata provider required");
-        }
-        if self.download.is_empty() {
-            return Err("at least one download backend required");
-        }
         if self.importer.is_empty() {
             return Err("at least one music importer required");
         }

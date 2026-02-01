@@ -5,6 +5,7 @@ pub mod download;
 pub mod folder;
 pub mod guard;
 pub mod search;
+pub mod settings;
 pub mod system;
 pub mod user;
 
@@ -13,6 +14,7 @@ pub use download::*;
 pub use folder::*;
 pub use guard::*;
 pub use search::*;
+pub use settings::*;
 pub use system::*;
 pub use user::*;
 

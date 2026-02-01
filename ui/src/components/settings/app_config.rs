@@ -1,0 +1,135 @@
+use dioxus::prelude::*;
+
+use crate::settings_context::use_settings;
+
+#[component]
+pub fn AppConfigManager() -> Element {
+    let mut settings = use_settings();
+    let mut lastfm_api_key = use_signal(String::new);
+    let mut slskd_url = use_signal(String::new);
+    let mut slskd_api_key = use_signal(String::new);
+    let mut error = use_signal(String::new);
+    let mut success_msg = use_signal(String::new);
+    let mut saving = use_signal(|| false);
+    let mut loaded = use_signal(|| false);
+
+    use_future(move || async move {
+        if let Ok(config) = api::get_app_config().await {
+            lastfm_api_key.set(config.lastfm_api_key.unwrap_or_default());
+            slskd_url.set(config.slskd_url.unwrap_or_default());
+            slskd_api_key.set(config.slskd_api_key.unwrap_or_default());
+            loaded.set(true);
+        }
+    });
+
+    let handle_save = move |_| async move {
+        error.set(String::new());
+        success_msg.set(String::new());
+        saving.set(true);
+
+        let config = api::AppConfigValues {
+            lastfm_api_key: Some(lastfm_api_key()),
+            slskd_url: Some(slskd_url()),
+            slskd_api_key: Some(slskd_api_key()),
+        };
+
+        match api::update_app_config(config).await {
+            Ok(_) => {
+                let _ = settings.refresh_providers().await;
+                success_msg.set("Configuration saved".to_string());
+            }
+            Err(e) => error.set(format!("Failed to save: {e}")),
+        }
+        saving.set(false);
+    };
+
+    if !loaded() {
+        return rsx! {
+            div { class: "bg-beet-panel border border-white/10 p-6 rounded-lg shadow-2xl relative z-10",
+                div { class: "animate-pulse text-gray-400 font-mono", "Loading..." }
+            }
+        };
+    }
+
+    rsx! {
+        div { class: "bg-beet-panel border border-white/10 p-6 rounded-lg shadow-2xl relative z-10",
+            h2 { class: "text-xl font-bold mb-4 text-beet-accent font-display", "Provider Configuration" }
+
+            if !error().is_empty() {
+                div { class: "mb-4 p-4 bg-red-900/20 border border-red-500/50 rounded text-red-400 font-mono text-sm",
+                    "{error}"
+                }
+            }
+            if !success_msg().is_empty() {
+                div { class: "mb-4 p-4 bg-green-900/20 border border-green-500/50 rounded text-green-400 font-mono text-sm",
+                    "{success_msg}"
+                }
+            }
+
+            div { class: "space-y-6 mb-6",
+                div {
+                    h3 { class: "text-sm font-semibold text-white mb-3", "Soulseek (slskd)" }
+                    div { class: "space-y-4",
+                        div {
+                            label { class: "block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider",
+                                "slskd URL"
+                            }
+                            input {
+                                class: "w-full p-2 rounded bg-beet-dark border border-white/10 focus:border-beet-accent focus:outline-none text-white font-mono",
+                                value: "{slskd_url}",
+                                oninput: move |e| slskd_url.set(e.value()),
+                                placeholder: "http://localhost:5030",
+                            }
+                        }
+                        div {
+                            label { class: "block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider",
+                                "slskd API Key"
+                            }
+                            input {
+                                class: "w-full p-2 rounded bg-beet-dark border border-white/10 focus:border-beet-accent focus:outline-none text-white font-mono",
+                                value: "{slskd_api_key}",
+                                oninput: move |e| slskd_api_key.set(e.value()),
+                                placeholder: "Enter slskd API key",
+                                "type": "password",
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    h3 { class: "text-sm font-semibold text-white mb-3", "Metadata Providers" }
+                    div { class: "space-y-4",
+                        div {
+                            label { class: "block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider",
+                                "Last.fm API Key"
+                            }
+                            input {
+                                class: "w-full p-2 rounded bg-beet-dark border border-white/10 focus:border-beet-accent focus:outline-none text-white font-mono",
+                                value: "{lastfm_api_key}",
+                                oninput: move |e| lastfm_api_key.set(e.value()),
+                                placeholder: "Enter Last.fm API key",
+                                "type": "password",
+                            }
+                            p { class: "text-xs text-gray-500 mt-1 font-mono",
+                                "Get one at "
+                                a {
+                                    href: "https://www.last.fm/api/account/create",
+                                    target: "_blank",
+                                    class: "text-beet-accent hover:underline",
+                                    "last.fm/api"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            button {
+                class: "retro-btn rounded",
+                disabled: saving(),
+                onclick: handle_save,
+                if saving() { "Saving..." } else { "Save Configuration" }
+            }
+        }
+    }
+}

@@ -14,8 +14,10 @@ use crate::{server_fns::server_error, AuthSession};
 #[cfg(feature = "server")]
 use crate::globals::{
     cleanup_stale_channels, get_or_create_user_channel, register_user_task, unregister_user_task,
-    SERVICES, USER_CHANNELS,
+    USER_CHANNELS,
 };
+#[cfg(feature = "server")]
+use crate::services::download_backend;
 
 // Local modules
 #[cfg(feature = "server")]
@@ -35,9 +37,9 @@ async fn do_download(
     items: Vec<DownloadableItem>,
     backend_id: Option<&str>,
 ) -> Result<Vec<QueuedDownload>, ServerFnError> {
-    let backend = SERVICES
-        .download(backend_id)
-        .ok_or_else(|| server_error("download backend not found"))?;
+    let backend = download_backend(backend_id)
+        .await
+        .map_err(|e| server_error(format!("download backend not available: {}", e)))?;
 
     backend.download(items).await.map_err(server_error)
 }

@@ -41,12 +41,8 @@ pub struct AppConfig {
     database_url: String,
     /// JWT signing secret (MUST be set in production)
     secret_key: String,
-    /// slskd API base URL (required)
-    slskd_url: String,
-    /// slskd API authentication key (required)
-    slskd_api_key: String,
-    /// Directory where slskd downloads files (default: "/downloads")
-    slskd_download_path: PathBuf,
+    /// Directory where downloads are saved (default: "/downloads")
+    download_path: PathBuf,
     /// Path to beets configuration file (default: "beets_config.yaml")
     beets_config: PathBuf,
     /// Enable album mode for beets import (groups tracks by folder)
@@ -60,9 +56,6 @@ pub struct AppConfig {
 #[cfg(feature = "server")]
 impl AppConfig {
     /// Load configuration from environment variables.
-    ///
-    /// # Panics
-    /// Panics if required environment variables (SLSKD_URL, SLSKD_API_KEY) are missing.
     pub fn from_env() -> Self {
         let secret_key = std::env::var("SECRET_KEY").unwrap_or_else(|_| {
             tracing::error!(
@@ -86,11 +79,8 @@ impl AppConfig {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite:soulbeet.db".to_string()),
             secret_key,
-            slskd_url: std::env::var("SLSKD_URL").expect("Missing required SLSKD_URL env var"),
-            slskd_api_key: std::env::var("SLSKD_API_KEY")
-                .expect("Missing required SLSKD_API_KEY env var"),
-            slskd_download_path: PathBuf::from(
-                std::env::var("SLSKD_DOWNLOAD_PATH").unwrap_or_else(|_| "/downloads".to_string()),
+            download_path: PathBuf::from(
+                std::env::var("DOWNLOAD_PATH").unwrap_or_else(|_| "/downloads".to_string()),
             ),
             beets_config: PathBuf::from(
                 std::env::var("BEETS_CONFIG").unwrap_or_else(|_| "beets_config.yaml".to_string()),
@@ -114,19 +104,9 @@ impl AppConfig {
         &self.secret_key
     }
 
-    /// Get the slskd base URL.
-    pub fn slskd_url(&self) -> &str {
-        &self.slskd_url
-    }
-
-    /// Get the slskd API key.
-    pub fn slskd_api_key(&self) -> &str {
-        &self.slskd_api_key
-    }
-
-    /// Get the slskd download path.
-    pub fn slskd_download_path(&self) -> &PathBuf {
-        &self.slskd_download_path
+    /// Get the download path.
+    pub fn download_path(&self) -> &PathBuf {
+        &self.download_path
     }
 
     /// Get the beets config path.

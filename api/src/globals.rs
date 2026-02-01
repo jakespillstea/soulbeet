@@ -8,12 +8,7 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use shared::download::DownloadProgress;
 #[cfg(feature = "server")]
-use soulbeet::{
-    beets::BeetsImporter,
-    musicbrainz::MusicBrainzProvider,
-    slskd::{DownloadConfig, SoulseekClientBuilder},
-    Services, ServicesBuilder,
-};
+use soulbeet::{beets::BeetsImporter, Services, ServicesBuilder};
 #[cfg(feature = "server")]
 use tokio::sync::{broadcast, RwLock};
 #[cfg(feature = "server")]
@@ -106,25 +101,8 @@ impl Default for UserChannel {
 }
 
 #[cfg(feature = "server")]
-use crate::config::CONFIG;
-
-#[cfg(feature = "server")]
 pub static SERVICES: LazyLock<Services> = LazyLock::new(|| {
-    let slskd_client = SoulseekClientBuilder::new()
-        .api_key(CONFIG.slskd_api_key())
-        .base_url(CONFIG.slskd_url())
-        .download_config(DownloadConfig {
-            batch_size: 3,
-            batch_delay_ms: 3000,
-            max_retries: 3,
-            retry_base_delay_ms: 1000,
-        })
-        .build()
-        .expect("Failed to create Soulseek client");
-
     ServicesBuilder::new()
-        .add_metadata(MusicBrainzProvider::new())
-        .add_download(slskd_client)
         .add_importer(BeetsImporter::from_env())
         .build()
         .expect("Failed to build services")

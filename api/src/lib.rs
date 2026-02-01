@@ -3,6 +3,7 @@ pub mod config;
 pub mod db;
 pub mod globals;
 pub mod models;
+pub mod services;
 
 pub mod server_fns;
 

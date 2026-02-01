@@ -6,7 +6,9 @@ use shared::{
 };
 
 #[cfg(feature = "server")]
-use crate::{globals::SERVICES, server_fns::server_error, AuthSession};
+use crate::{server_fns::server_error, AuthSession};
+#[cfg(feature = "server")]
+use crate::services::{download_backend, metadata_provider};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchQuery {
@@ -32,9 +34,9 @@ pub struct PollQuery {
 
 #[post("/api/metadata/search/album", _: AuthSession)]
 pub async fn search_album(input: SearchQuery) -> Result<Vec<SearchResult>, ServerFnError> {
-    let provider = SERVICES
-        .metadata(input.provider.as_deref())
-        .ok_or_else(|| server_error("metadata provider not found"))?;
+    let provider = metadata_provider(input.provider.as_deref())
+        .await
+        .map_err(server_error)?;
 
     provider
         .search_albums(input.artist.as_deref(), &input.query, 25)
@@ -44,9 +46,9 @@ pub async fn search_album(input: SearchQuery) -> Result<Vec<SearchResult>, Serve
 
 #[post("/api/metadata/search/track", _: AuthSession)]
 pub async fn search_track(input: SearchQuery) -> Result<Vec<SearchResult>, ServerFnError> {
-    let provider = SERVICES
-        .metadata(input.provider.as_deref())
-        .ok_or_else(|| server_error("metadata provider not found"))?;
+    let provider = metadata_provider(input.provider.as_deref())
+        .await
+        .map_err(server_error)?;
 
     provider
         .search_tracks(input.artist.as_deref(), &input.query, 25)
@@ -56,18 +58,18 @@ pub async fn search_track(input: SearchQuery) -> Result<Vec<SearchResult>, Serve
 
 #[post("/api/metadata/album", _: AuthSession)]
 pub async fn find_album(input: AlbumQuery) -> Result<AlbumWithTracks, ServerFnError> {
-    let provider = SERVICES
-        .metadata(input.provider.as_deref())
-        .ok_or_else(|| server_error("metadata provider not found"))?;
+    let provider = metadata_provider(input.provider.as_deref())
+        .await
+        .map_err(server_error)?;
 
     provider.get_album(&input.id).await.map_err(server_error)
 }
 
 #[post("/api/download/search/start", _: AuthSession)]
 pub async fn start_download_search(data: DownloadQuery) -> Result<String, ServerFnError> {
-    let backend = SERVICES
-        .download(data.backend.as_deref())
-        .ok_or_else(|| server_error("download backend not found"))?;
+    let backend = download_backend(data.backend.as_deref())
+        .await
+        .map_err(|e| server_error(format!("download backend not available: {}", e)))?;
 
     backend
         .start_search(data.album.as_ref(), &data.tracks)
@@ -77,9 +79,9 @@ pub async fn start_download_search(data: DownloadQuery) -> Result<String, Server
 
 #[post("/api/download/search/poll", _: AuthSession)]
 pub async fn poll_download_search(input: PollQuery) -> Result<DownloadSearchResult, ServerFnError> {
-    let backend = SERVICES
-        .download(input.backend.as_deref())
-        .ok_or_else(|| server_error("download backend not found"))?;
+    let backend = download_backend(input.backend.as_deref())
+        .await
+        .map_err(|e| server_error(format!("download backend not available: {}", e)))?;
 
     backend
         .poll_search(&input.search_id)

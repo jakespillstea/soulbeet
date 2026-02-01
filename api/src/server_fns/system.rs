@@ -5,15 +5,15 @@ use shared::system::{AvailableBackends, SystemHealth};
 use shared::system::BackendInfo;
 
 #[cfg(feature = "server")]
-use crate::{globals::SERVICES, AuthSession};
+use crate::{globals::SERVICES, services::download_backend, AuthSession};
 
 #[get("/api/system/health", _: AuthSession)]
 pub async fn get_system_health() -> Result<SystemHealth, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        let slskd_online = match SERVICES.download(None) {
-            Some(backend) => backend.health_check().await,
-            None => false,
+        let downloader_online = match download_backend(None).await {
+            Ok(backend) => backend.health_check().await,
+            Err(_) => false,
         };
 
         let beets_ready = match SERVICES.importer(None) {
@@ -22,7 +22,7 @@ pub async fn get_system_health() -> Result<SystemHealth, ServerFnError> {
         };
 
         Ok(SystemHealth {
-            slskd_online,
+            downloader_online,
             beets_ready,
         })
     }
