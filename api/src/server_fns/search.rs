@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use shared::{
     download::{DownloadQuery, SearchResult as DownloadSearchResult},
-    musicbrainz::{AlbumWithTracks, SearchResult},
+    metadata::{AlbumWithTracks, Provider, SearchResults},
 };
 
 #[cfg(feature = "server")]
@@ -22,7 +22,7 @@ pub struct SearchQuery {
 pub struct AlbumQuery {
     pub id: String,
     #[serde(default)]
-    pub provider: Option<String>,
+    pub provider: Option<Provider>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,32 +33,45 @@ pub struct PollQuery {
 }
 
 #[post("/api/metadata/search/album", _: AuthSession)]
-pub async fn search_album(input: SearchQuery) -> Result<Vec<SearchResult>, ServerFnError> {
+pub async fn search_album(input: SearchQuery) -> Result<SearchResults, ServerFnError> {
     let provider = metadata_provider(input.provider.as_deref())
         .await
         .map_err(server_error)?;
 
-    provider
+    let provider_enum: Provider = provider.id().parse().unwrap_or_default();
+    let results = provider
         .search_albums(input.artist.as_deref(), &input.query, 25)
         .await
-        .map_err(server_error)
+        .map_err(server_error)?;
+
+    Ok(SearchResults {
+        provider: provider_enum,
+        results,
+    })
 }
 
 #[post("/api/metadata/search/track", _: AuthSession)]
-pub async fn search_track(input: SearchQuery) -> Result<Vec<SearchResult>, ServerFnError> {
+pub async fn search_track(input: SearchQuery) -> Result<SearchResults, ServerFnError> {
     let provider = metadata_provider(input.provider.as_deref())
         .await
         .map_err(server_error)?;
 
-    provider
+    let provider_enum: Provider = provider.id().parse().unwrap_or_default();
+    let results = provider
         .search_tracks(input.artist.as_deref(), &input.query, 25)
         .await
-        .map_err(server_error)
+        .map_err(server_error)?;
+
+    Ok(SearchResults {
+        provider: provider_enum,
+        results,
+    })
 }
 
 #[post("/api/metadata/album", _: AuthSession)]
 pub async fn find_album(input: AlbumQuery) -> Result<AlbumWithTracks, ServerFnError> {
-    let provider = metadata_provider(input.provider.as_deref())
+    let provider_str = input.provider.map(|p| p.to_string());
+    let provider = metadata_provider(provider_str.as_deref())
         .await
         .map_err(server_error)?;
 

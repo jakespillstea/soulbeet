@@ -3,9 +3,10 @@ use std::{collections::HashMap, sync::{Arc, LazyLock}};
 
 #[cfg(feature = "server")]
 use soulbeet::{
+    beets::BeetsImporter,
     musicbrainz::MusicBrainzProvider,
     slskd::{DownloadConfig, SoulseekClientBuilder},
-    DownloadBackend, LastFmProvider, MetadataProvider,
+    DownloadBackend, LastFmProvider, MetadataProvider, MusicImporter,
 };
 #[cfg(feature = "server")]
 use tokio::sync::RwLock;
@@ -22,12 +23,20 @@ pub mod downloaders {
     pub const SLSKD: &str = "slskd";
 }
 
+pub mod importers {
+    pub const BEETS: &str = "beets";
+}
+
 #[cfg(feature = "server")]
 static METADATA_PROVIDERS: LazyLock<RwLock<HashMap<String, Arc<dyn MetadataProvider>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 #[cfg(feature = "server")]
 static DOWNLOAD_BACKENDS: LazyLock<RwLock<HashMap<String, Arc<dyn DownloadBackend>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+#[cfg(feature = "server")]
+static MUSIC_IMPORTERS: LazyLock<RwLock<HashMap<String, Arc<dyn MusicImporter>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 #[cfg(feature = "server")]
@@ -41,6 +50,11 @@ pub fn available_metadata_providers() -> Vec<(&'static str, &'static str)> {
 #[cfg(feature = "server")]
 pub fn available_download_backends() -> Vec<(&'static str, &'static str)> {
     vec![(downloaders::SLSKD, "Soulseek")]
+}
+
+#[cfg(feature = "server")]
+pub fn available_importers() -> Vec<(&'static str, &'static str)> {
+    vec![(importers::BEETS, "Beets")]
 }
 
 #[cfg(feature = "server")]
@@ -126,9 +140,31 @@ pub async fn download_backend(id: Option<&str>) -> Result<Arc<dyn DownloadBacken
 }
 
 #[cfg(feature = "server")]
+fn init_importer(id: &str) -> Result<Arc<dyn MusicImporter>, String> {
+    match id {
+        importers::BEETS => Ok(Arc::new(BeetsImporter::from_env())),
+        _ => Err(format!("Unknown importer: {}", id)),
+    }
+}
+
+#[cfg(feature = "server")]
+pub async fn music_importer(id: Option<&str>) -> Result<Arc<dyn MusicImporter>, String> {
+    let requested = id.unwrap_or(importers::BEETS);
+
+    if let Some(importer) = MUSIC_IMPORTERS.read().await.get(requested) {
+        return Ok(importer.clone());
+    }
+
+    let importer = init_importer(requested)?;
+    MUSIC_IMPORTERS.write().await.insert(requested.to_string(), importer.clone());
+    Ok(importer)
+}
+
+#[cfg(feature = "server")]
 pub async fn reload_providers() {
     METADATA_PROVIDERS.write().await.clear();
     DOWNLOAD_BACKENDS.write().await.clear();
+    MUSIC_IMPORTERS.write().await.clear();
 }
 
 #[cfg(feature = "server")]

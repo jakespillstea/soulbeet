@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use reqwest::{Client, Method, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared::{
-    musicbrainz::{Album, Track},
+    metadata::{Album, Track},
     slskd::{AlbumResult, DownloadResponse, FileEntry, FlattenedFiles, SearchState, TrackResult},
 };
 use std::{

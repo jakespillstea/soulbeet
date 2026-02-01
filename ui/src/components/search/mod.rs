@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 use shared::download::{
     DownloadQuery, DownloadableGroup, DownloadableItem, SearchState as DownloadSearchState,
 };
-use shared::musicbrainz::{AlbumWithTracks, SearchResult};
+use shared::metadata::{AlbumWithTracks, Provider, SearchResult, SearchResults};
 use shared::system::SystemHealth;
 
 use track::TrackResult;
@@ -28,7 +28,7 @@ use search_type_toggle::{SearchType, SearchTypeToggle};
 pub fn Search() -> Element {
     let auth = use_auth();
     let mut settings = use_settings();
-    let mut search_results = use_signal::<Option<Vec<SearchResult>>>(|| None);
+    let mut search_results = use_signal::<Option<SearchResults>>(|| None);
     let mut search = use_signal(String::new);
     let mut artist = use_signal::<Option<String>>(|| None);
     let mut search_type = use_signal(|| settings.last_search_type());
@@ -184,13 +184,13 @@ pub fn Search() -> Element {
         loading.set(false);
     };
 
-    let view_full_album = move |album_id: String| async move {
+    let view_full_album = move |album_id: String, provider: Provider| async move {
         loading.set(true);
 
         match auth
             .call(api::find_album(api::AlbumQuery {
                 id: album_id.clone(),
-                provider: Some(settings.default_provider()),
+                provider: Some(provider),
             }))
             .await
         {
@@ -347,51 +347,55 @@ pub fn Search() -> Element {
           }
         } else {
           match &*search_results.read() {
-              Some(ref items) if !items.is_empty() => rsx! {
-                div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8 rounded-lg",
-                  h5 { class: "text-xl font-display font-bold mb-4 border-b border-white/10 pb-2 text-white",
-                    "Search Results"
-                  }
-                  ul { class: "list-none p-0 space-y-4",
-                    for item in items.iter() {
-                      match item {
-                          SearchResult::Track(ref track) => {
-                              let track_clone = track.clone();
-                              let track_clone_2 = track.clone();
-                              rsx! {
-                                li { key: "{track.id}",
-                                  TrackResult {
-                                    on_track_click: move || {
-                                        spawn(download(DownloadQuery::from(track_clone.clone())));
-                                    },
-                                    on_album_click: move || {
-                                        spawn(
-                                            view_full_album(
-                                                track_clone_2
-                                                    .album_id
-                                                    .clone()
-                                                    .expect("This callback should not be callable without an album"),
-                                            ),
-                                        );
-                                    },
-                                    track: track.clone(),
+              Some(ref data) if !data.results.is_empty() => {
+                let provider = data.provider;
+                rsx! {
+                  div { class: "w-full bg-beet-panel/50 border border-white/5 p-6 backdrop-blur-sm mt-8 rounded-lg",
+                    h5 { class: "text-xl font-display font-bold mb-4 border-b border-white/10 pb-2 text-white",
+                      "Search Results"
+                    }
+                    ul { class: "list-none p-0 space-y-4",
+                      for item in data.results.iter() {
+                        match item {
+                            SearchResult::Track(ref track) => {
+                                let track_clone = track.clone();
+                                let track_clone_2 = track.clone();
+                                rsx! {
+                                  li { key: "{track.id}",
+                                    TrackResult {
+                                      on_track_click: move || {
+                                          spawn(download(DownloadQuery::from(track_clone.clone())));
+                                      },
+                                      on_album_click: move || {
+                                          spawn(
+                                              view_full_album(
+                                                  track_clone_2
+                                                      .album_id
+                                                      .clone()
+                                                      .expect("This callback should not be callable without an album"),
+                                                  provider,
+                                              ),
+                                          );
+                                      },
+                                      track: track.clone(),
+                                    }
                                   }
                                 }
-                              }
-                          }
-                          SearchResult::Album(ref album) => {
-                              let album_clone = album.clone();
-                              rsx! {
-                                li { key: "{album.id}",
-                                  AlbumResult {
-                                    on_click: move || {
-                                        spawn(view_full_album(album_clone.id.clone()));
-                                    },
-                                    album: album.clone(),
+                            }
+                            SearchResult::Album(ref album) => {
+                                let album_clone = album.clone();
+                                rsx! {
+                                  li { key: "{album.id}",
+                                    AlbumResult {
+                                      on_click: move || {
+                                          spawn(view_full_album(album_clone.id.clone(), provider));
+                                      },
+                                      album: album.clone(),
+                                    }
                                   }
                                 }
-                              }
-                          }
+                            }
+                        }
                       }
                     }
                   }

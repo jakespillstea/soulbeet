@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use shared::{
     download::{DownloadProgress, DownloadableItem, QueuedDownload, SearchResult},
     library::DuplicateReport,
-    musicbrainz::{Album, AlbumWithTracks, SearchResult as MetadataSearchResult, Track},
+    metadata::{Album, AlbumWithTracks, SearchResult as MetadataSearchResult, Track},
 };
 use std::path::Path;
 

@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use shared::musicbrainz::Album;
+use shared::metadata::Album;
 
 use crate::CoverArt;
 
@@ -11,18 +11,14 @@ pub struct Props {
 
 #[component]
 pub fn AlbumResult(props: Props) -> Element {
-    let album_id = props.album.id.clone();
     let album = &props.album;
-
-    let cover_art_url = format!("https://coverartarchive.org/release/{}/front-250", album_id);
-    let alt_text = format!("Album cover for {}", album.title);
 
     rsx! {
       div {
         onclick: move |_| props.on_click.call(()),
         class: "bg-white/5 border border-white/5 p-4 rounded-lg hover:border-beet-accent/50 hover:bg-white/10 transition-all duration-200 flex items-center gap-4 cursor-pointer group",
 
-        CoverArt { src: cover_art_url, alt: alt_text }
+        CoverArt { album: album.clone() }
 
         div { class: "flex-grow flex flex-col justify-center",
           h5 { class: "text-lg font-bold text-white group-hover:text-beet-accent transition-colors",

@@ -8,8 +8,6 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use shared::download::DownloadProgress;
 #[cfg(feature = "server")]
-use soulbeet::{beets::BeetsImporter, Services, ServicesBuilder};
-#[cfg(feature = "server")]
 use tokio::sync::{broadcast, RwLock};
 #[cfg(feature = "server")]
 use tokio_util::sync::CancellationToken;
@@ -99,15 +97,6 @@ impl Default for UserChannel {
         Self::new()
     }
 }
-
-#[cfg(feature = "server")]
-pub static SERVICES: LazyLock<Services> = LazyLock::new(|| {
-    ServicesBuilder::new()
-        .add_importer(BeetsImporter::from_env())
-        .build()
-        .expect("Failed to build services")
-});
-
 
 #[cfg(feature = "server")]
 pub static USER_CHANNELS: LazyLock<RwLock<HashMap<String, UserChannel>>> =

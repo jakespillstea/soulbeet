@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use shared::{
     download::DownloadQuery,
-    musicbrainz::{AlbumWithTracks, Track},
+    metadata::{AlbumWithTracks, Track},
 };
 use std::collections::HashSet;
 

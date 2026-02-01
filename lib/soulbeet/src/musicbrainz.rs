@@ -7,7 +7,7 @@ use musicbrainz_rs::{
     },
     Fetch, MusicBrainzClient, Search,
 };
-use shared::musicbrainz::{Album, AlbumWithTracks, SearchResult, Track};
+use shared::metadata::{Album, AlbumWithTracks, SearchResult, Track};
 use std::{collections::HashSet, future::Future, sync::OnceLock, time::Duration};
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -247,13 +247,15 @@ pub async fn search(
                 if !unique_tracks.contains(&key) {
                     let first_release = recording.releases.as_ref().and_then(|r| r.first());
                     let track = Track {
-                        id: recording.id,
+                        id: recording.id.clone(),
                         title: recording.title.clone(),
                         artist: artist_name.clone(),
                         album_id: first_release.map(|release| release.id.clone()),
                         album_title: first_release.map(|r| r.title.clone()),
                         release_date: first_release.and_then(|r| r.date.clone().map(|d| d.0)),
                         duration: format_duration(&recording.length),
+                        mbid: Some(recording.id.clone()),
+                        release_mbid: first_release.map(|r| r.id.clone()),
                     };
                     unique_tracks.insert(key);
                     results.push(SearchResult::Track(track));
@@ -307,6 +309,8 @@ pub async fn search(
                         title: release_group.title.clone(),
                         artist: format_artist_credit(&release_group.artist_credit),
                         release_date: final_release.date.as_ref().map(|d| d.0.clone()),
+                        mbid: Some(final_release.id.clone()),
+                        cover_url: None,
                     }));
                 }
             }
@@ -347,6 +351,8 @@ pub async fn find_album(release_id: &str) -> Result<AlbumWithTracks, musicbrainz
                             album_title: Some(release.title.clone()),
                             release_date: release.date.as_ref().map(|d| d.0.clone()),
                             duration: format_duration(&recording.length),
+                            mbid: Some(recording.id.clone()),
+                            release_mbid: Some(release.id.clone()),
                         });
                     }
                 }
@@ -356,10 +362,12 @@ pub async fn find_album(release_id: &str) -> Result<AlbumWithTracks, musicbrainz
 
     // First, create the standalone Album object.
     let album = Album {
-        id: release.id,
+        id: release.id.clone(),
         title: release.title,
         artist: format_artist_credit(&release.artist_credit),
         release_date: release.date.map(|d| d.0),
+        mbid: Some(release.id),
+        cover_url: None,
     };
 
     let album_with_tracks = AlbumWithTracks { album, tracks };

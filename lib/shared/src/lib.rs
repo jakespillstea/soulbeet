@@ -1,5 +1,5 @@
 pub mod download;
 pub mod library;
-pub mod musicbrainz;
+pub mod metadata;
 pub mod slskd;
 pub mod system;

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::musicbrainz::{Album, Track};
+use crate::metadata::{Album, Track};
 
 #[derive(Serialize, Clone, PartialEq, Deserialize, Debug, Default)]
 pub struct DownloadQuery {

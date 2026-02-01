@@ -1,11 +1,32 @@
 use reqwest::Client;
 use serde::Deserialize;
-use shared::musicbrainz::{Album, AlbumWithTracks, SearchResult, Track};
+use shared::metadata::{Album, AlbumWithTracks, SearchResult, Track};
 use tracing::{info, warn};
 
 use crate::error::{Result, SoulseekError};
 
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
+
+#[derive(Debug, Deserialize)]
+struct LastFmImage {
+    #[serde(rename = "#text")]
+    url: String,
+    size: String,
+}
+
+impl LastFmImage {
+    fn get_largest(images: &[LastFmImage]) -> Option<String> {
+        let sizes = ["extralarge", "large", "medium", "small"];
+        for size in sizes {
+            if let Some(img) = images.iter().find(|i| i.size == size) {
+                if !img.url.is_empty() {
+                    return Some(img.url.clone());
+                }
+            }
+        }
+        images.iter().find(|i| !i.url.is_empty()).map(|i| i.url.clone())
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct AlbumSearchResponse {
@@ -31,6 +52,8 @@ struct LastFmAlbum {
     url: String,
     #[serde(default)]
     mbid: Option<String>,
+    #[serde(default)]
+    image: Vec<LastFmImage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +98,8 @@ struct LastFmAlbumInfo {
     mbid: Option<String>,
     url: String,
     #[serde(default)]
+    image: Vec<LastFmImage>,
+    #[serde(default)]
     tracks: Option<LastFmTracks>,
     #[serde(default)]
     wiki: Option<LastFmWiki>,
@@ -108,6 +133,8 @@ struct LastFmAlbumTrack {
     name: String,
     #[serde(default)]
     duration: Option<u32>,
+    #[serde(default)]
+    mbid: Option<String>,
     #[serde(default)]
     artist: Option<LastFmTrackArtist>,
     #[serde(rename = "@attr", default)]
@@ -305,7 +332,6 @@ fn format_duration(seconds: Option<u32>) -> Option<String> {
     })
 }
 
-/// Generate a unique ID for Last.fm items (they don't always have MBIDs)
 fn generate_lastfm_id(artist: &str, name: &str) -> String {
     format!("lastfm:{}:{}", artist.to_lowercase(), name.to_lowercase())
 }
@@ -331,11 +357,18 @@ impl crate::MetadataProvider for LastFmProvider {
         Ok(albums
             .into_iter()
             .map(|a| {
+                let mbid = a.mbid.filter(|s| !s.is_empty());
+                let id = mbid
+                    .clone()
+                    .unwrap_or_else(|| generate_lastfm_id(&a.artist, &a.name));
+                let cover_url = LastFmImage::get_largest(&a.image);
                 SearchResult::Album(Album {
-                    id: a.mbid.unwrap_or_else(|| generate_lastfm_id(&a.artist, &a.name)),
+                    id,
                     title: a.name,
                     artist: a.artist,
-                    release_date: None, // Last.fm search doesn't return release dates
+                    release_date: None,
+                    mbid,
+                    cover_url,
                 })
             })
             .collect())
@@ -352,25 +385,32 @@ impl crate::MetadataProvider for LastFmProvider {
         Ok(tracks
             .into_iter()
             .map(|t| {
+                let mbid = t.mbid.filter(|s| !s.is_empty());
+                let id = mbid
+                    .clone()
+                    .unwrap_or_else(|| generate_lastfm_id(&t.artist, &t.name));
                 SearchResult::Track(Track {
-                    id: t.mbid.unwrap_or_else(|| generate_lastfm_id(&t.artist, &t.name)),
+                    id,
                     title: t.name,
                     artist: t.artist,
                     album_id: None,
                     album_title: None,
                     release_date: None,
                     duration: None,
+                    mbid,
+                    release_mbid: None,
                 })
             })
             .collect())
     }
 
     async fn get_album(&self, id: &str) -> Result<AlbumWithTracks> {
-        // Last.fm IDs are in format "lastfm:artist:album" or MBIDs
-        // For MBID lookups, we'd need to use MusicBrainz - Last.fm needs artist+album
         if let Some(rest) = id.strip_prefix("lastfm:") {
             if let Some((artist, album)) = rest.split_once(':') {
                 let info = self.get_album_info(artist, album).await?;
+
+                let album_mbid = info.mbid.as_ref().filter(|s| !s.is_empty()).cloned();
+                let cover_url = LastFmImage::get_largest(&info.image);
 
                 let tracks = info
                     .tracks
@@ -378,17 +418,22 @@ impl crate::MetadataProvider for LastFmProvider {
                         t.track
                             .into_vec()
                             .into_iter()
-                            .map(|track| Track {
-                                id: generate_lastfm_id(&info.artist, &track.name),
-                                title: track.name,
-                                artist: track
-                                    .artist
-                                    .map(|a| a.name)
-                                    .unwrap_or_else(|| info.artist.clone()),
-                                album_id: Some(id.to_string()),
-                                album_title: Some(info.name.clone()),
-                                release_date: info.wiki.as_ref().and_then(|w| w.published.clone()),
-                                duration: format_duration(track.duration),
+                            .map(|track| {
+                                let track_mbid = track.mbid.filter(|s| !s.is_empty());
+                                Track {
+                                    id: generate_lastfm_id(&info.artist, &track.name),
+                                    title: track.name,
+                                    artist: track
+                                        .artist
+                                        .map(|a| a.name)
+                                        .unwrap_or_else(|| info.artist.clone()),
+                                    album_id: Some(id.to_string()),
+                                    album_title: Some(info.name.clone()),
+                                    release_date: info.wiki.as_ref().and_then(|w| w.published.clone()),
+                                    duration: format_duration(track.duration),
+                                    mbid: track_mbid,
+                                    release_mbid: album_mbid.clone(),
+                                }
                             })
                             .collect()
                     })
@@ -400,14 +445,14 @@ impl crate::MetadataProvider for LastFmProvider {
                         title: info.name,
                         artist: info.artist,
                         release_date: info.wiki.and_then(|w| w.published),
+                        mbid: album_mbid,
+                        cover_url,
                     },
                     tracks,
                 });
             }
         }
 
-        // If it's an MBID, we can't fetch it from Last.fm directly
-        // The caller should use MusicBrainz for MBID lookups
         warn!("Cannot fetch album by MBID from Last.fm: {}", id);
         Err(SoulseekError::Api {
             status: 400,

@@ -3,11 +3,14 @@ use dioxus::logger::tracing::{info, warn};
 #[cfg(feature = "server")]
 use shared::download::{DownloadProgress, DownloadState};
 #[cfg(feature = "server")]
-use soulbeet::beets;
+use soulbeet::ImportResult;
 #[cfg(feature = "server")]
 use std::path::Path;
 #[cfg(feature = "server")]
 use tokio::sync::broadcast;
+
+#[cfg(feature = "server")]
+use crate::services::music_importer;
 
 /// Attempt to clean up a failed download/import file
 #[cfg(feature = "server")]
@@ -58,7 +61,6 @@ pub async fn import_group(
         source_path, as_album
     );
 
-    // Notify Importing
     let importing_entries: Vec<_> = entries
         .iter()
         .map(|e| DownloadProgress {
@@ -68,9 +70,27 @@ pub async fn import_group(
         .collect();
     let _ = tx.send(importing_entries);
 
-    match beets::import(vec![source_path.clone()], &target_path, as_album).await {
-        Ok(beets::ImportResult::Success) => {
-            info!("Beet import successful");
+    let importer = match music_importer(None).await {
+        Ok(imp) => imp,
+        Err(e) => {
+            warn!("Failed to get importer: {}", e);
+            let failed_entries: Vec<_> = entries
+                .iter()
+                .map(|entry| DownloadProgress {
+                    state: DownloadState::Failed(format!("No importer available: {e}")),
+                    error: Some(format!("No importer available: {e}")),
+                    ..entry.clone()
+                })
+                .collect();
+            let _ = tx.send(failed_entries);
+            return;
+        }
+    };
+
+    let source = Path::new(&source_path);
+    match importer.import(&[source], &target_path, as_album).await {
+        Ok(ImportResult::Success) => {
+            info!("Import successful");
             let imported_entries: Vec<_> = entries
                 .iter()
                 .map(|e| DownloadProgress {
@@ -80,8 +100,8 @@ pub async fn import_group(
                 .collect();
             let _ = tx.send(imported_entries);
         }
-        Ok(beets::ImportResult::Skipped) => {
-            info!("Beet import skipped items");
+        Ok(ImportResult::Skipped) => {
+            info!("Import skipped items");
             let skipped_entries: Vec<_> = entries
                 .iter()
                 .map(|e| DownloadProgress {
@@ -91,50 +111,47 @@ pub async fn import_group(
                 .collect();
             let _ = tx.send(skipped_entries);
 
-            // Clean up skipped files to prevent accumulation
             for entry in &entries {
                 cleanup_failed_file(&entry.item).await;
             }
             cleanup_empty_parent_dir(&source_path).await;
         }
-        Ok(beets::ImportResult::Failed(err)) => {
-            info!("Beet import failed: {}", err);
+        Ok(ImportResult::Failed(err)) => {
+            info!("Import failed: {}", err);
             let failed_entries: Vec<_> = entries
                 .iter()
                 .map(|e| DownloadProgress {
-                    state: DownloadState::Failed(format!("Beet import failed: {err}")),
-                    error: Some(format!("Beet import failed: {err}")),
+                    state: DownloadState::Failed(format!("Import failed: {err}")),
+                    error: Some(format!("Import failed: {err}")),
                     ..e.clone()
                 })
                 .collect();
             let _ = tx.send(failed_entries);
 
-            // Clean up failed files
             for entry in &entries {
                 cleanup_failed_file(&entry.item).await;
             }
             cleanup_empty_parent_dir(&source_path).await;
         }
-        Ok(beets::ImportResult::TimedOut) => {
-            warn!("Beet import timed out for: {}", source_path);
+        Ok(ImportResult::TimedOut) => {
+            warn!("Import timed out for: {}", source_path);
             let failed_entries: Vec<_> = entries
                 .iter()
                 .map(|e| DownloadProgress {
-                    state: DownloadState::Failed("Import timed out - beets process took too long".into()),
+                    state: DownloadState::Failed("Import timed out".into()),
                     error: Some("Import timed out".into()),
                     ..e.clone()
                 })
                 .collect();
             let _ = tx.send(failed_entries);
 
-            // Clean up timed out files
             for entry in &entries {
                 cleanup_failed_file(&entry.item).await;
             }
             cleanup_empty_parent_dir(&source_path).await;
         }
         Err(e) => {
-            warn!("Beet import error for {}: {}", source_path, e);
+            warn!("Import error for {}: {}", source_path, e);
             let failed_entries: Vec<_> = entries
                 .iter()
                 .map(|entry| DownloadProgress {
@@ -145,7 +162,6 @@ pub async fn import_group(
                 .collect();
             let _ = tx.send(failed_entries);
 
-            // Clean up on error
             for entry in &entries {
                 cleanup_failed_file(&entry.item).await;
             }

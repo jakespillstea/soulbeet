@@ -27,25 +27,19 @@ pub async fn update_user_settings(update: UpdateUserSettings) -> Result<UserSett
 /// Get list of available metadata providers
 #[get("/api/settings/providers", _: AuthSession)]
 pub async fn get_metadata_providers() -> Result<Vec<ProviderInfo>, ServerFnError> {
-    use crate::models::app_config::keys;
-    use crate::services::{available_metadata_providers, providers};
+    use crate::services::{available_metadata_providers, metadata_provider};
 
-    let lastfm_available = AppConfig::get(keys::LASTFM_API_KEY)
-        .await
-        .map_err(server_error)?
-        .is_some();
-
-    Ok(available_metadata_providers()
-        .into_iter()
-        .map(|(id, name)| ProviderInfo {
+    let mut providers = Vec::new();
+    for (id, name) in available_metadata_providers() {
+        let available = metadata_provider(Some(id)).await.is_ok();
+        providers.push(ProviderInfo {
             id: id.to_string(),
             name: name.to_string(),
-            available: match id {
-                providers::LASTFM => lastfm_available,
-                _ => true,
-            },
-        })
-        .collect())
+            available,
+        });
+    }
+
+    Ok(providers)
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

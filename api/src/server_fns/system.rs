@@ -5,7 +5,12 @@ use shared::system::{AvailableBackends, SystemHealth};
 use shared::system::BackendInfo;
 
 #[cfg(feature = "server")]
-use crate::{globals::SERVICES, services::download_backend, AuthSession};
+use crate::services::{
+    available_download_backends, available_importers, available_metadata_providers,
+    download_backend, music_importer,
+};
+#[cfg(feature = "server")]
+use crate::AuthSession;
 
 #[get("/api/system/health", _: AuthSession)]
 pub async fn get_system_health() -> Result<SystemHealth, ServerFnError> {
@@ -16,9 +21,9 @@ pub async fn get_system_health() -> Result<SystemHealth, ServerFnError> {
             Err(_) => false,
         };
 
-        let beets_ready = match SERVICES.importer(None) {
-            Some(importer) => importer.health_check().await,
-            None => false,
+        let beets_ready = match music_importer(None).await {
+            Ok(importer) => importer.health_check().await,
+            Err(_) => false,
         };
 
         Ok(SystemHealth {
@@ -35,24 +40,21 @@ pub async fn get_backends() -> Result<AvailableBackends, ServerFnError> {
     #[cfg(feature = "server")]
     {
         Ok(AvailableBackends {
-            metadata: SERVICES
-                .list_metadata()
+            metadata: available_metadata_providers()
                 .into_iter()
                 .map(|(id, name)| BackendInfo {
                     id: id.to_string(),
                     name: name.to_string(),
                 })
                 .collect(),
-            download: SERVICES
-                .list_downloads()
+            download: available_download_backends()
                 .into_iter()
                 .map(|(id, name)| BackendInfo {
                     id: id.to_string(),
                     name: name.to_string(),
                 })
                 .collect(),
-            importer: SERVICES
-                .list_importers()
+            importer: available_importers()
                 .into_iter()
                 .map(|(id, name)| BackendInfo {
                     id: id.to_string(),
