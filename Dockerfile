@@ -1,5 +1,5 @@
 # Build Stage
-FROM rust:1.91-bookworm AS builder
+FROM rust:1.91-trixie AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -39,7 +39,7 @@ RUN dx bundle --package web --release
 # Create an empty directory for data to be copied to runtime
 RUN mkdir -p /empty_data
 
-FROM python:3.11-slim-bookworm AS beets-builder
+FROM python:3.11-slim-trixie AS beets-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
@@ -58,7 +58,7 @@ RUN pip install --no-cache-dir beets requests musicbrainzngs
 RUN sed -i '1s|^.*$|#!/usr/bin/python3|' $VIRTUAL_ENV/bin/beet
 
 # --- RUNTIME STAGE ---
-FROM gcr.io/distroless/python3-debian12
+FROM gcr.io/distroless/python3-debian13
 
 # COPY --from=docker.io/mwader/static-ffmpeg:8.0.1 /ffmpeg /usr/local/bin/ffmpeg
 # COPY --from=docker.io/mwader/static-ffmpeg:8.0.1 /ffprobe /usr/local/bin/ffprobe
